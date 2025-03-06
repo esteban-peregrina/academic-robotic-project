@@ -1,0 +1,7 @@
+.vscode/
+
+# When using a devcontainer
+.devcontainer/
+
+# For MacOS local repositories
+.DS_Store
