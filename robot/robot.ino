@@ -1,3 +1,8 @@
+/*****************************************************************************/
+/*********** PROJET DE ROBOTIQUE 3A - POLYTECH SORBONE - MARS 2025 ***********/
+/************* AUTHORS : E. PEREGRINA, E. BARNABE & P-L. PASUTTO *************/
+/*****************************************************************************/
+
 /****************** BIBLIOTHÈQUES *********************/
 // Libraries for CAN communications
 #include <can-serial.h>
@@ -8,6 +13,9 @@
 
 
 #include <SPI.h>
+
+// Math
+#include <math.h>
 
 /****************** CONSTANTES *********************/
 // Capteurs
@@ -24,8 +32,24 @@
   const int CAN_INT_PIN = 2;
 #endif
  
+// Math
+#define MY_PI 3.14159265359
 
-// 
+// Loop
+#define PERIOD_IN_MICROS 5000 // 5 ms
+
+// Booléens
+#if !defined(FALSE)
+#define FALSE 0
+#define TRUE 1
+#endif
+
+// Moteurs
+#define MOTOR_ID 1  // Here change with the motor ID if it has been changed with the firmware.
+#define MOTOR_MAX_VEL_CMD 300000 
+#define MOTOR_MAX_VOLTAGE_CMD 200 
+#define MOTOR_MAX_POS_DEG 120.0
+#define MOTOR_MIN_POS_DEG -120.0
 
 
 /****************** DECLARATION DES VARIABLES GLOBALES *********************/
@@ -34,6 +58,25 @@ int MesureMaxi; // Distance maxi a mesurer //
 int MesureMini; // Distance mini a mesurer //
 long Duree;
 long Distance;
+
+// Moteurs
+double currentMotorPosDeg;
+double currentMotorVelDegPerSec;
+double previousMotorPosDeg;
+int currentMotorPosEncoder;
+int offsetMotorPosEnconder;
+int currentNumOfMotorRevol;
+
+// Ports
+uint8_t analogPinP0=A0; 
+uint8_t analogPinP1=A2; 
+int currentP0Rawvalue;
+int currentP1Rawvalue;
+
+// Général
+int counterForPrinting;
+int printingPeriodicity;
+unsigned long current_time, old_time, initial_time;
 
 /****************** DECLARATION DES FONCTIONS *********************/
 // Capteurs
@@ -47,7 +90,11 @@ void deplacementLineaire(float dist);
 // Saisie
 void saisir();
 
-
+// Moteurs
+void motorON();
+void motorOFF();
+void sendVelocityCommand(long int vel); // This function sends a velocity command. Unit = hundredth of degree per second 
+void readMotorState();
 
 
 void setup() {
@@ -96,70 +143,7 @@ void loop() {
   // delay(1000); // On ajoute 1 seconde de delais entre chaque mesure //
 }
 
-/*****************************************************************************/
-/**************** AUTOMATIC CONTROL - POLYTECH SORBONE - JAN 2025 ************/
-/*********************** AUTHORS : L. BRIETZKE & G. MOREL ********************/
-/************************* Sequence 1 - Problem 1 ****************************/
-/**************************** YOU'RE IN CONTROL ******************************/
-/*****************************************************************************/
-
-
-// Libraries for CAN communications
-#include <can-serial.h>
-#include <mcp2515_can.h>
-#include <mcp2515_can_dfs.h>
-#include <mcp_can.h>
-#if defined(SEEED_WIO_TERMINAL) && defined(CAN_2518FD)
-const int SPI_CS_PIN = BCM8;
-const int CAN_INT_PIN = BCM25;
-#else
-const int SPI_CS_PIN = 10;
-const int CAN_INT_PIN = 2;
-#endif
-
-#include "mcp2515_can.h"
-mcp2515_can CAN(SPI_CS_PIN);  // Set CS pin
-#define MAX_DATA_SIZE 8
-
-#include <SPI.h>
-#include <math.h>
-
-#define MY_PI 3.14159265359
-
-#define PERIOD_IN_MICROS 5000 // 5 ms
-
-#if !defined(FALSE)
-#define FALSE 0
-#define TRUE 1
-#endif
-
-#define MOTOR_ID 1  // Here change with the motor ID if it has been changed with the firmware.
-#define MOTOR_MAX_VEL_CMD 300000 
-#define MOTOR_MAX_VOLTAGE_CMD 200 
-#define MOTOR_MAX_POS_DEG 120.0
-#define MOTOR_MIN_POS_DEG -120.0
-
-/******************  GLOBAL VARIABLES *********************/
-// Global motor state variables
-double currentMotorPosDeg;
-double currentMotorVelDegPerSec;
-double previousMotorPosDeg;
-int currentMotorPosEncoder;
-int offsetMotorPosEnconder;
-int currentNumOfMotorRevol;
-
-// PIN ASSIGNMENT
-uint8_t analogPinP0=A0; 
-uint8_t analogPinP1=A2; 
-int currentP0Rawvalue;
-int currentP1Rawvalue;
-
-// General purpose global variables
-int counterForPrinting;
-int printingPeriodicity;
-unsigned long current_time, old_time, initial_time;
-
-void motorON(){
+void motorON() {
   unsigned char msg[MAX_DATA_SIZE] = {
     0x88,
     0x00,
@@ -172,11 +156,9 @@ void motorON(){
   };
 
   CAN.sendMsgBuf(0x140+MOTOR_ID, 0, 8, msg); 
-
 }
 
-void motorOFF(){
-
+void motorOFF() {
   unsigned char msg[MAX_DATA_SIZE] = {
     0x80,
     0x00,
@@ -189,11 +171,13 @@ void motorOFF(){
   };
 
   CAN.sendMsgBuf(0x140+MOTOR_ID, 0, 8, msg); 
-
 }
 
-/*** This function sends a velocity command. Unit = hundredth of degree per second *****/
+
 void sendVelocityCommand(long int vel) {
+  /* 
+  This function sends a velocity command. Unit = hundredth of degree per second 
+  */
 
   long int local_velocity;
   local_velocity = vel;
@@ -216,15 +200,16 @@ void sendVelocityCommand(long int vel) {
 }
 
 
-/*** This function reads the motor states and affects the following global variables *****/
-/*     previousMotorPosDeg : previous position in Deg (set to the new value, will be "previous" for next call);
-/*     currentNumOfMotorRevol = number of  revoutions (old value +/- 1 if one jump has been observed ont the encoder read)
-/*     currentEncodPos = current Encoder Pos value (read)
-/*     currentMotorPosDeg = Motor position in degrees
-/*     currentMotorVelDegPerSec = Motor position velocity in degrees per s
-***********************************************************************/
+void readMotorState() {
+  /*
+  This function reads the motor states and affects the following global variables
+  previousMotorPosDeg : previous position in Deg (set to the new value, will be "previous" for next call);
+  currentNumOfMotorRevol = number of  revoutions (old value +/- 1 if one jump has been observed ont the encoder read)
+  currentEncodPos = current Encoder Pos value (read)
+  currentMotorPosDeg = Motor position in degrees
+  currentMotorVelDegPerSec = Motor position velocity in degrees per s
+  */
 
-void readMotorState()  {
   uint32_t id;
   uint8_t type;
   uint8_t len;
@@ -268,6 +253,10 @@ void readMotorState()  {
 
   previousMotorPosDeg = currentMotorPosDeg; // writing in the global variable for next call
 }
+
+
+
+
 
 
 /********************* THIS FUNCTION IS EXECUTED FIRST AND CONTAINS INITIALIZATION ***********/
