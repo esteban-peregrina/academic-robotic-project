@@ -106,6 +106,65 @@ void setup() {
   //Bus CAN
   mcp2515_can CAN(SPI_CS_PIN);  // Set CS pin
 
+  /*************** MOTEUR ***************/
+  int i;
+  char serialReceivedChar;
+  int nothingReceived;
+
+  // Initialization of the serial link
+  Serial.begin(115200);
+
+  // Initialization of the analog input pins
+  pinMode(analogPinP0, INPUT);
+  pinMode(analogPinP1, INPUT);
+  currentP0Rawvalue = analogRead(analogPinP0);
+  currentP1Rawvalue = analogRead(analogPinP1);
+
+  // Initialization of the CAN communication. THis will wait until the motor is powered on
+  while (CAN_OK != CAN.begin(CAN_500KBPS)) {
+    Serial.println("CAN init fail, retry ...");
+    delay(500);
+  }
+
+  // Initialization of the motor command and the position measurement variables
+  previousMotorPosDeg = 0.0;
+  currentNumOfMotorRevol = 0;
+  offsetMotorPosEnconder = 0;
+
+  // Send motot off then motor on command to reset
+  motorOFF();
+  delay(500);
+  readMotorState();
+
+  nothingReceived = TRUE;
+  while (nothingReceived==TRUE){
+    serialReceivedChar = Serial.read();
+    if(serialReceivedChar == 'S') {
+      nothingReceived = FALSE;
+    }
+  }
+
+  motorON();
+  readMotorState();
+  delay(500);
+  
+  sendVelocityCommand((long int)(0));
+  delay(500);
+  readMotorState(); 
+
+  offsetMotorPosEnconder = currentMotorPosEncoder;
+  currentNumOfMotorRevol = 0;
+  previousMotorPosDeg = 0.0;
+  sendVelocityCommand((long int)(0));
+  delay(500);
+  readMotorState(); 
+
+  Serial.println("End of Initialization routine.");
+  counterForPrinting = 0;
+  printingPeriodicity = 10; // The variables will be sent to the serial link one out of printingPeriodicity loop runs.  
+  current_time = micros(); 
+  initial_time=current_time;
+
   // pinMode(Broche_Trigger, OUTPUT); // Broche Trigger en sortie //
   // pinMode(Broche_Echo, INPUT); // Broche Echo en entree //
   // Serial.begin (115200);
@@ -115,7 +174,43 @@ void loop() {
   AJOUTER COGNITION
   */
 
-  
+  int i;
+  unsigned int sleep_time;
+  double elapsed_time_in_s;
+  double motorVelocityCommandInDegPerSec;
+  double gainPotValToVel;
+
+  // STEP 1 : dealing with clock
+  old_time=current_time;
+  current_time=micros();
+  elapsed_time_in_s = (double)(current_time-initial_time);
+  elapsed_time_in_s *= 0.000001;
+ 
+  // STEP 2 : Reading the potentiometers
+  currentP0Rawvalue = analogRead(analogPinP0);
+  //currentP1Rawvalue = analogRead(analogPinP1);
+  currentP1Rawvalue = 512;
+
+  gainPotValToVel = 200.0;
+  motorVelocityCommandInDegPerSec =  gainPotValToVel * ((double)(currentP1Rawvalue-512)) ; 
+  sendVelocityCommand((long int)(motorVelocityCommandInDegPerSec));
+  readMotorState();
+
+  counterForPrinting++;
+  if (counterForPrinting > printingPeriodicity) {  // Reset the counter and print
+    counterForPrinting = 0;
+    Serial.print("t:");
+    Serial.print(elapsed_time_in_s);
+    Serial.print(",P0:");
+    Serial.print(currentP0Rawvalue);
+    Serial.print(",P1:");
+    Serial.println(currentP1Rawvalue);
+  }
+
+  sleep_time = PERIOD_IN_MICROS-((micros()-current_time));
+  if ( (sleep_time >0) && (sleep_time < PERIOD_IN_MICROS) ) {
+    delayMicroseconds(sleep_time);
+  }
 
 
   // // Debut de la mesure avec un signal de 10 µS applique sur TRIG //
@@ -142,6 +237,8 @@ void loop() {
   // }
   // delay(1000); // On ajoute 1 seconde de delais entre chaque mesure //
 }
+
+/****************** IMPLEMENTATION DES FONCTIONS *********************/
 
 void motorON() {
   unsigned char msg[MAX_DATA_SIZE] = {
@@ -258,126 +355,3 @@ void readMotorState() {
 
 
 
-
-/********************* THIS FUNCTION IS EXECUTED FIRST AND CONTAINS INITIALIZATION ***********/
-void setup() {
-  int i;
-  char serialReceivedChar;
-  int nothingReceived;
-
-  // Initialization of the serial link
-  Serial.begin(115200);
-
-  // Initialization of the analog input pins
-  pinMode(analogPinP0, INPUT);
-  pinMode(analogPinP1, INPUT);
-  currentP0Rawvalue = analogRead(analogPinP0);
-  currentP1Rawvalue = analogRead(analogPinP1);
-
-  // Initialization of the CAN communication. THis will wait until the motor is powered on
-  while (CAN_OK != CAN.begin(CAN_500KBPS)) {
-    Serial.println("CAN init fail, retry ...");
-    delay(500);
-  }
-
-
-  Serial.println("");
-  Serial.println("");
-  Serial.println("");
-  Serial.println("");
-  Serial.println("");
-  Serial.println("***********************************************************************");
-  Serial.println("***********************************************************************");
-  Serial.println("***********************************************************************");
-  Serial.println(" Serial link and CAN initialization went ok! Power ON the motor");
-  Serial.println("***********************************************************************");
-  Serial.println("***********************************************************************");
-  Serial.println("***********************************************************************");
-  Serial.println("***********************************************************************");
-  Serial.println("");
-
-
-  // Initialization of the motor command and the position measurement variables
-  previousMotorPosDeg = 0.0;
-  currentNumOfMotorRevol = 0;
-  offsetMotorPosEnconder = 0;
-
-  // Send motot off then motor on command to reset
-  motorOFF();
-  delay(500);
-  readMotorState();
-  Serial.println("");
-  Serial.println("***********************************************************************");
-  Serial.println(" Turn the rotor in its ZERO position they type 'S'");
-  Serial.println("***********************************************************************");
-
-  nothingReceived = TRUE;
-  while (nothingReceived==TRUE){
-    serialReceivedChar = Serial.read();
-    if(serialReceivedChar == 'S') {
-      nothingReceived = FALSE;
-    }
-  }
-
-  motorON();
-  readMotorState();
-  delay(500);
-  
-  sendVelocityCommand((long int)(0));
-  delay(500);
-  readMotorState(); 
-
-  offsetMotorPosEnconder = currentMotorPosEncoder;
-  currentNumOfMotorRevol = 0;
-  previousMotorPosDeg = 0.0;
-  sendVelocityCommand((long int)(0));
-  delay(500);
-  readMotorState(); 
-
-  Serial.println("End of Initialization routine.");
-  counterForPrinting = 0;
-  printingPeriodicity = 10; // The variables will be sent to the serial link one out of printingPeriodicity loop runs.  
-  current_time = micros(); 
-  initial_time=current_time;
-}
-
-
-void loop() {
-  int i;
-  unsigned int sleep_time;
-  double elapsed_time_in_s;
-  double motorVelocityCommandInDegPerSec;
-  double gainPotValToVel;
-
-  // STEP 1 : dealing with clock
-  old_time=current_time;
-  current_time=micros();
-  elapsed_time_in_s = (double)(current_time-initial_time);
-  elapsed_time_in_s *= 0.000001;
- 
-  // STEP 2 : Reading the potentiometers
-  currentP0Rawvalue = analogRead(analogPinP0);
-  //currentP1Rawvalue = analogRead(analogPinP1);
-  currentP1Rawvalue = 512;
-
-  gainPotValToVel = 200.0;
-  motorVelocityCommandInDegPerSec =  gainPotValToVel * ((double)(currentP1Rawvalue-512)) ; 
-  sendVelocityCommand((long int)(motorVelocityCommandInDegPerSec));
-  readMotorState();
-
-  counterForPrinting++;
-  if (counterForPrinting > printingPeriodicity) {  // Reset the counter and print
-    counterForPrinting = 0;
-    Serial.print("t:");
-    Serial.print(elapsed_time_in_s);
-    Serial.print(",P0:");
-    Serial.print(currentP0Rawvalue);
-    Serial.print(",P1:");
-    Serial.println(currentP1Rawvalue);
-  }
-
-  sleep_time = PERIOD_IN_MICROS-((micros()-current_time));
-  if ( (sleep_time >0) && (sleep_time < PERIOD_IN_MICROS) ) {
-    delayMicroseconds(sleep_time);
-  }
-}
