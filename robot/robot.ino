@@ -146,30 +146,27 @@ void loop() {
   AJOUTER COGNITION
   */
 
-  int i;
+  // Gestion de la boucle
   unsigned int sleep_time;
   double elapsed_time_in_s;
-  double motorVelocityCommandInDegPerSec;
-  double gainPotValToVel;
-
-  // STEP 1 : dealing with clock
-  old_time=current_time;
-  current_time=micros();
+  old_time = current_time;
+  current_time = micros();
   elapsed_time_in_s = (double)(current_time-initial_time);
   elapsed_time_in_s *= 0.000001;
  
-  // STEP 2 : Reading the potentiometers
-  currentP0Rawvalue = analogRead(analogPinP0);
-  //currentP1Rawvalue = analogRead(analogPinP1);
-  currentP1Rawvalue = 512;
+  /*************** MOTEURS ***************/
+  // Pour le moment c'est pour tester
+  // Activation des moteurs
+  sendVelocityCommand(MOTOR_ID_LEFT, 100);
+  readMotorState(MOTOR_ID_LEFT);
+  sendVelocityCommand(MOTOR_ID_RIGHT, 100);
+  readMotorState(MOTOR_ID_RIGHT);
+  sendVelocityCommand(MOTOR_ID_ARM, 100);
+  readMotorState(MOTOR_ID_ARM);
 
-  gainPotValToVel = 200.0;
-  motorVelocityCommandInDegPerSec =  gainPotValToVel * ((double)(currentP1Rawvalue-512)) ; 
-  sendVelocityCommand((long int)(motorVelocityCommandInDegPerSec));
-  readMotorState();
-
-  /*************** CAPTEURS ***************/
-  // Debut de la mesure avec un signal de 10 µS applique sur TRIG //
+  /*************** CAPTEURS ***************/ 
+  // Pour le moment c'est pour tester
+  // Debut de la mesure avec un signal de 10 µS applique sur TRIG 
   digitalWrite(Broche_Trigger, LOW); // On efface l'etat logique de TRIG 
   delayMicroseconds(2);
   digitalWrite(Broche_Trigger, HIGH); // On met la broche TRIG a "1" pendant 10µS 
@@ -198,15 +195,11 @@ void loop() {
 
     counterForPrinting = 0;
     Serial.print("t:");
-    Serial.print(elapsed_time_in_s);
-    Serial.print(",P0:");
-    Serial.print(currentP0Rawvalue);
-    Serial.print(",P1:");
-    Serial.println(currentP1Rawvalue);
+    Serial.println(elapsed_time_in_s);
   }
   
 
-
+  
   // Patienter pour respecter la fréquence d'itération de la boucle
   sleep_time = PERIOD_IN_MICROS - (micros() - current_time);
   if ( (sleep_time > 0) && (sleep_time < PERIOD_IN_MICROS) ) delayMicroseconds(sleep_time); // On patiente le temps restant pour respecter la fréquence d'itération (SUPPOSE QUE LES INSTRUCTIONS SONT RÉALISABLES DURANT LA PERIODE)
