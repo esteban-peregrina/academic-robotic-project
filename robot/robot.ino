@@ -19,8 +19,8 @@
 
 /****************** CONSTANTES *********************/
 // Capteurs
-#define Broche_Echo 7 // Broche Echo du HC-SR04 sur D7 //
-#define Broche_Trigger 8 // Broche Trigger du HC-SR04 sur D8 //
+#define Broche_Echo 7 // Broche Echo du HC-SR04 sur D7
+#define Broche_Trigger 8 // Broche Trigger du HC-SR04 sur D8 
 
 // Bus CAN
 #define MAX_DATA_SIZE 8
@@ -32,17 +32,11 @@
   const int CAN_INT_PIN = 2;
 #endif
  
-// Math
+// Math (pourra servir)
 #define MY_PI 3.14159265359
 
 // Loop properties
 #define PERIOD_IN_MICROS 5000 // 5 ms
-
-// Booléens
-#if !defined(FALSE)
-#define FALSE 0
-#define TRUE 1
-#endif
 
 // Moteurs
 #define MOTOR_ID_LEFT 11
@@ -118,6 +112,10 @@ void setup() {
   printingPeriodicity = 10; // The variables will be sent to the serial link one out of printingPeriodicity loop runs. 
 
   /*************** BROCHES ***************/
+  // Capteurs
+  pinMode(Broche_Trigger, OUTPUT); // Broche Trigger en sortie 
+  pinMode(Broche_Echo, INPUT); // Broche Echo en entree 
+
   // Initialisation des broches analogiques d'entrée
   pinMode(analogPinP0, INPUT);
   pinMode(analogPinP1, INPUT);
@@ -142,10 +140,6 @@ void setup() {
   /*************** MESURES ***************/ 
   current_time = micros(); 
   initial_time=current_time;
-
-  // pinMode(Broche_Trigger, OUTPUT); // Broche Trigger en sortie //
-  // pinMode(Broche_Echo, INPUT); // Broche Echo en entree //
-  // Serial.begin (115200);
 }
 void loop() {
   /*
@@ -174,8 +168,34 @@ void loop() {
   sendVelocityCommand((long int)(motorVelocityCommandInDegPerSec));
   readMotorState();
 
+  /*************** CAPTEURS ***************/
+  // Debut de la mesure avec un signal de 10 µS applique sur TRIG //
+  digitalWrite(Broche_Trigger, LOW); // On efface l'etat logique de TRIG 
+  delayMicroseconds(2);
+  digitalWrite(Broche_Trigger, HIGH); // On met la broche TRIG a "1" pendant 10µS 
+  delayMicroseconds(10);
+  digitalWrite(Broche_Trigger, LOW); // On remet la broche TRIG a "0" 
+  
+  // On mesure combien de temps le niveau logique haut est actif sur ECHO 
+  Duree = pulseIn(Broche_Echo, HIGH);
+  // Calcul de la distance grace au temps mesure 
+  Distance = Duree * 0.034 / 2; // Calcul avec la vitesse du son
+
+
+  /*************** AFFICHAGE ***************/
   counterForPrinting++;
   if (counterForPrinting > printingPeriodicity) {  // Reset the counter and print
+    // Verification si valeur mesuree dans la plage //
+    if (Distance >= MesureMaxi || Distance <= MesureMini) {
+      // Si la distance est hors plage, on affiche un message d'erreur //
+      Serial.println("Distance de mesure en dehors de la plage (3 cm à 3 m)");
+    } else {
+      // Affichage dans le moniteur serie de la distance mesuree //
+      Serial.print("Distance mesuree :");
+      Serial.print(Distance);
+      Serial.println("cm");
+    }
+
     counterForPrinting = 0;
     Serial.print("t:");
     Serial.print(elapsed_time_in_s);
@@ -184,37 +204,13 @@ void loop() {
     Serial.print(",P1:");
     Serial.println(currentP1Rawvalue);
   }
-
-  sleep_time = PERIOD_IN_MICROS-((micros()-current_time));
-  if ( (sleep_time >0) && (sleep_time < PERIOD_IN_MICROS) ) {
-    delayMicroseconds(sleep_time);
-  }
-
-
-  // // Debut de la mesure avec un signal de 10 µS applique sur TRIG //
-  // digitalWrite(Broche_Trigger, LOW); // On efface l'etat logique de TRIG //
-  // delayMicroseconds(2);
-  // digitalWrite(Broche_Trigger, HIGH); // On met la broche TRIG a "1" pendant 10µS //
-  // delayMicroseconds(10);
-  // digitalWrite(Broche_Trigger, LOW); // On remet la broche TRIG a "0" //
   
-  // // On mesure combien de temps le niveau logique haut est actif sur ECHO //
-  // Duree = pulseIn(Broche_Echo, HIGH);
-  // // Calcul de la distance grace au temps mesure //
-  // Distance = Duree*0.034/2; // *** voir explications apres l'exemple de code *** //
-  
-  // // Verification si valeur mesuree dans la plage //
-  // if (Distance >= MesureMaxi || Distance <= MesureMini) {
-  //   // Si la distance est hors plage, on affiche un message d'erreur //
-  //   Serial.println("Distance de mesure en dehors de la plage (3 cm à 3 m)");
-  // } else {
-  //   // Affichage dans le moniteur serie de la distance mesuree //
-  //   Serial.print("Distance mesuree :");
-  //   Serial.print(Distance);
-  //   Serial.println("cm");
-  // }
-  // delay(1000); // On ajoute 1 seconde de delais entre chaque mesure //
-}
+
+
+  // Patienter pour respecter la fréquence d'itération de la boucle
+  sleep_time = PERIOD_IN_MICROS - (micros() - current_time);
+  if ( (sleep_time > 0) && (sleep_time < PERIOD_IN_MICROS) ) delayMicroseconds(sleep_time); // On patiente le temps restant pour respecter la fréquence d'itération (SUPPOSE QUE LES INSTRUCTIONS SONT RÉALISABLES DURANT LA PERIODE)
+} // FIN DE LA BOUCLE PRINCIPALE
 
 /****************** IMPLEMENTATION DES FONCTIONS *********************/
 
