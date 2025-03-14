@@ -1,20 +1,20 @@
 /*****************************************************************************/
-/*********** PROJET DE ROBOTIQUE 3A - POLYTECH SORBONE - MARS 2025 ***********/
-/************* AUTHORS : E. PEREGRINA, E. BARNABE & P-L. PASUTTO *************/
+/********** PROJET DE ROBOTIQUE, 3A - POLYTECH SORBONE - MARS 2025 ***********/
+/************* AUTEURS : E. PEREGRINA, E. BARNABE & P-L. PASUTTO *************/
 /*****************************************************************************/
 
 /****************** BIBLIOTHÈQUES *********************/
-// Libraries for CAN communications
+// For CAN communications
 #include <can-serial.h>
 #include <mcp2515_can.h>
 #include <mcp2515_can_dfs.h>
 #include <mcp_can.h>
 #include "mcp2515_can.h"
 
-
+// For devices communication using the SPI bus
 #include <SPI.h>
 
-// Math
+// For math functions
 #include <math.h>
 
 /****************** CONSTANTES *********************/
@@ -28,14 +28,14 @@
   const int SPI_CS_PIN = BCM8;
   const int CAN_INT_PIN = BCM25;
 #else
-  const int SPI_CS_PIN = 10;
+  const int SPI_CS_PIN = 10; 
   const int CAN_INT_PIN = 2;
 #endif
  
 // Math
 #define MY_PI 3.14159265359
 
-// Loop
+// Loop properties
 #define PERIOD_IN_MICROS 5000 // 5 ms
 
 // Booléens
@@ -45,31 +45,35 @@
 #endif
 
 // Moteurs
-#define MOTOR_ID 1  // Here change with the motor ID if it has been changed with the firmware.
-#define MOTOR_MAX_VEL_CMD 300000 
-#define MOTOR_MAX_VOLTAGE_CMD 200 
-#define MOTOR_MAX_POS_DEG 120.0
-#define MOTOR_MIN_POS_DEG -120.0
+#define MOTOR_ID_LEFT 11
+#define MOTOR_ID_RIGHT 12
+#define MOTOR_ID_ARM 41
 
+#define MOTOR_ARM_MAX_POS_DEG 120.0 // À changer, butée logicielle pour le bras
+#define MOTOR_ARM_MIN_POS_DEG -120.0
 
 /****************** DECLARATION DES VARIABLES GLOBALES *********************/
 // Capteurs
-int MesureMaxi; // Distance maxi a mesurer //
-int MesureMini; // Distance mini a mesurer //
+int MesureMaxi; // Distance maxi a mesurer 
+int MesureMini; // Distance mini a mesurer 
 long Duree;
 long Distance;
 
 // Moteurs
-double currentMotorPosDeg;
-double currentMotorVelDegPerSec;
-double previousMotorPosDeg;
-int currentMotorPosEncoder;
-int offsetMotorPosEnconder;
-int currentNumOfMotorRevol;
+int currentArmMotorPosEncoder; // In raw encoder units
+int offsetArmMotorPosEncoder; // In raw encoder units
+int currentNumOfArmMotorRevol; // Number
+
+double currentArmMotorPosDeg; // In degrees
+double previousArmMotorPosDeg; // In degrees
+
+double currentArmMotorVel; // In degrees per seconds
+double currentLeftMotorVel; // In degrees per seconds
+double currentRightMotorVel; // In degrees per seconds
 
 // Ports
-uint8_t analogPinP0=A0; 
-uint8_t analogPinP1=A2; 
+uint8_t analogPinP0 = A0; 
+uint8_t analogPinP1 = A2; 
 int currentP0Rawvalue;
 int currentP1Rawvalue;
 
@@ -106,62 +110,36 @@ void setup() {
   //Bus CAN
   mcp2515_can CAN(SPI_CS_PIN);  // Set CS pin
 
-  /*************** MOTEUR ***************/
-  int i;
-  char serialReceivedChar;
-  int nothingReceived;
-
+  /*************** MONITEUR SERIE ***************/
   // Initialization of the serial link
   Serial.begin(115200);
+  
+  counterForPrinting = 0;
+  printingPeriodicity = 10; // The variables will be sent to the serial link one out of printingPeriodicity loop runs. 
 
-  // Initialization of the analog input pins
+  /*************** BROCHES ***************/
+  // Initialisation des broches analogiques d'entrée
   pinMode(analogPinP0, INPUT);
   pinMode(analogPinP1, INPUT);
+
+  // Lecture initiale
   currentP0Rawvalue = analogRead(analogPinP0);
   currentP1Rawvalue = analogRead(analogPinP1);
 
-  // Initialization of the CAN communication. THis will wait until the motor is powered on
-  while (CAN_OK != CAN.begin(CAN_500KBPS)) {
-    Serial.println("CAN init fail, retry ...");
+  /*************** BUS CAN ***************/ 
+  // Démarrage de la communication avec le bus CAN
+  while (CAN.begin(CAN_500KBPS) != CAN_OK) { // Tant que le bus CAN ne reçoit rien 
+    Serial.println("CAN initialization failed, trying again...");
     delay(500);
-  }
+  } // On sort de la boucle si au moins un moteur à envoyé des données sur le bus CAN
 
-  // Initialization of the motor command and the position measurement variables
-  previousMotorPosDeg = 0.0;
-  currentNumOfMotorRevol = 0;
-  offsetMotorPosEnconder = 0;
+  /*************** MOTEURS ***************/ 
+  // Réinitialisation du moteur
+  resetMotor(MOTOR_ID_LEFT);
+  resetMotor(MOTOR_ID_RIGHT);
+  resetMotor(MOTOR_ID_ARM);
 
-  // Send motot off then motor on command to reset
-  motorOFF();
-  delay(500);
-  readMotorState();
-
-  nothingReceived = TRUE;
-  while (nothingReceived==TRUE){
-    serialReceivedChar = Serial.read();
-    if(serialReceivedChar == 'S') {
-      nothingReceived = FALSE;
-    }
-  }
-
-  motorON();
-  readMotorState();
-  delay(500);
-  
-  sendVelocityCommand((long int)(0));
-  delay(500);
-  readMotorState(); 
-
-  offsetMotorPosEnconder = currentMotorPosEncoder;
-  currentNumOfMotorRevol = 0;
-  previousMotorPosDeg = 0.0;
-  sendVelocityCommand((long int)(0));
-  delay(500);
-  readMotorState(); 
-
-  Serial.println("End of Initialization routine.");
-  counterForPrinting = 0;
-  printingPeriodicity = 10; // The variables will be sent to the serial link one out of printingPeriodicity loop runs.  
+  /*************** MESURES ***************/ 
   current_time = micros(); 
   initial_time=current_time;
 
@@ -240,7 +218,12 @@ void loop() {
 
 /****************** IMPLEMENTATION DES FONCTIONS *********************/
 
-void motorON() {
+void motorON(int motorID) {
+  /*
+  Allume le moteur identifié.
+
+  Précondition : Le moteur doit être correctement branché.
+  */
   unsigned char msg[MAX_DATA_SIZE] = {
     0x88,
     0x00,
@@ -252,10 +235,13 @@ void motorON() {
     0x00
   };
 
-  CAN.sendMsgBuf(0x140+MOTOR_ID, 0, 8, msg); 
+  CAN.sendMsgBuf(0x140 + motorID, 0, 8, msg); // Transmets le message au buffer du bus CAN, retourne CAN_OK ou CAN_FAIL
 }
 
-void motorOFF() {
+void motorOFF(int motorID) {
+  /*
+  Éteint le moteur identifié.
+  */
   unsigned char msg[MAX_DATA_SIZE] = {
     0x80,
     0x00,
@@ -267,88 +253,119 @@ void motorOFF() {
     0x00
   };
 
-  CAN.sendMsgBuf(0x140+MOTOR_ID, 0, 8, msg); 
+  CAN.sendMsgBuf(0x140 + motorID, 0, 8, msg); // Transmets le message au buffer du bus CAN, retourne CAN_OK ou CAN_FAIL
 }
 
 
-void sendVelocityCommand(long int vel) {
+void sendVelocityCommand(int motorID, long int velocity) {
   /* 
-  This function sends a velocity command. Unit = hundredth of degree per second 
+  Envoie la commande de vitesse spécifiée au moteur identifié. 
+
+  Précondition : La vitesse doit être exprimée en centième de degrés par seconde.
   */
 
-  long int local_velocity;
-  local_velocity = vel;
+  long int local_velocity; // A SUPPRIMER ?
+  local_velocity = velocity; // A SUPPRIMER ?
 
-  unsigned char *adresse_low = (unsigned char *)(&local_velocity);
+  unsigned char *adresse_low = (unsigned char *)(&local_velocity); // Convertit l'adresse de la vitesse en une chaine de caractère pour concorder avec la syntaxe du message à transmettre
 
   unsigned char msg[MAX_DATA_SIZE] = {
-    0xA2,
+    0xA2, // Valeur du potentiomètre ?
     0x00,
     0x00,
     0x00,
-    *(adresse_low),
-    *(adresse_low + 1),
-    *(adresse_low + 2),
-    *(adresse_low + 3)
+    *(adresse_low), // Déréférence l'adresse (le premier caractère de la chaîne)
+    *(adresse_low + 1), // 2ème caractère
+    *(adresse_low + 2), // 3ème caractère
+    *(adresse_low + 3) // 4ème caractère
 
   };
 
-  CAN.sendMsgBuf(0x140+MOTOR_ID, 0, 8, msg); 
+  CAN.sendMsgBuf(0x140 + motorID, 0, 8, msg); // Transmets le message au buffer du bus CAN, retourne CAN_OK ou CAN_FAIL
 }
 
 
-void readMotorState() {
+void readMotorState(int motorID) {
   /*
-  This function reads the motor states and affects the following global variables
-  previousMotorPosDeg : previous position in Deg (set to the new value, will be "previous" for next call);
-  currentNumOfMotorRevol = number of  revoutions (old value +/- 1 if one jump has been observed ont the encoder read)
-  currentEncodPos = current Encoder Pos value (read)
-  currentMotorPosDeg = Motor position in degrees
-  currentMotorVelDegPerSec = Motor position velocity in degrees per s
+  Récupère l'état du moteur identifié via les mesures de l'encodeur, et met à jour la valeur des variables globales suivantes :
+    currentNumOfMotorRevol : Nombre de révolutions du moteur (valeur précédente +/- 1 selon si une révolution à été observé par l'encodeur)
+    currentArmMotorPosDeg : Position du moteur en degrés, calculée à partir des valeurs brutes de l'encodeur
+    current[Left/Right/Arm]MotorVel : Vitesse du moteur, en degrés par secondes
+    previousArmMotorPosDeg : Position actuelle, en degrés (car la position actuelle deviendra la précédente au prochain appel)
   */
 
   uint32_t id;
-  uint8_t type;
   uint8_t len;
-  byte cdata[MAX_DATA_SIZE] = { 0 };
+  byte cdata[MAX_DATA_SIZE] = {0}; // Déclare et remplit le tableau de 0, buffer utilisé pour receptionner les données
   int data2_3, data4_5, data6_7;
   int currentMotorVelRaw;
 
-  // wait for data
-  while (CAN_MSGAVAIL != CAN.checkReceive())
-    ;
+  // Attend de réceptionner des données
+  while (CAN_MSGAVAIL != CAN.checkReceive());
 
-  // read data, len: data length, buf: data buf
-  CAN.readMsgBuf(&len, cdata);
+  // Lis les données, len: data length, buf: data buf
+  CAN.readMsgBuf(&len, cdata); // Écrit les valeurs du message transmis par le bus (données) CAN dans le buffer cdata
+  id = CAN.getCanId(); // Récupère la valeur de l'ID du bus CAN depuis lequel les données sont reçues
 
-  id = CAN.getCanId();
-  type = (CAN.isExtendedFrame() << 0) | (CAN.isRemoteRequest() << 1);
-
-  // Check if the received ID matches the motor ID
-  if ((id - 0x140) == MOTOR_ID) { 
+  
+  if ((id - 0x140) == motorID) { // Si l'ID reçu correspond à celui du moteur
     data4_5 = cdata[4] + pow(2, 8) * cdata[5];
-    currentMotorVelRaw = (int)data4_5;
+    currentMotorVelRaw = (int)data4_5; // Calcul la vitesse brute
     data6_7 = cdata[6] + pow(2, 8) * cdata[7];
-    currentMotorPosEncoder = (int)data6_7;
+    if (motorID == MOTOR_ID_ARM) currentArmMotorPosEncoder = (int)data6_7;
   }
 
-  // Conversion of the velocity and writing in the global cariable
-  currentMotorVelDegPerSec = ((double)(currentMotorVelRaw)); 
+  // Convertit la vitesse brute en degrés par secondes
+  if (motorID == MOTOR_ID_LEFT) currentLeftMotorVelDegPerSec = (double)(currentMotorVelRaw); 
+  else if (motorID == MOTOR_ID_RIGHT) currentRightMotorVelDegPerSec = (double)(currentMotorVelRaw); 
+  else currentArmMotorVelDegPerSec = (double)(currentMotorVelRaw); 
 
-  // Conversion of the position (with motor revolution counting) and wirting in the global variable
-  currentMotorPosEncoder -= offsetMotorPosEnconder;
-  currentMotorPosDeg = ((double)(currentNumOfMotorRevol)*360.0) + (((double)currentMotorPosEncoder) * 180.0 / 32768.0);  // On convertit en degré
+  if (motorID == MOTOR_ID_ARM) {
+    // Déduction de la position en degré à partir de l'offset, du nombre de révolutions, et de la valeur brute en unité encodeur
+    currentArmMotorPosEncoder -= offsetArmMotorPosEnconder; // On adapte la position en fonction du décalage introduit initialement (position de départ)
+    if ((currentArmMotorPosDeg - previousArmMotorPosDeg) < -20.0) currentNumOfArmMotorRevol++;
+    else if ((currentArmMotorPosDeg - previousArmMotorPosDeg) > 20.0) currentNumOfArmMotorRevol--;
+    currentArmMotorPosDeg = double)(currentNumOfArmMotorRevol * 360.0 + ((double)currentArmMotorPosEncoder) * 180.0 / 32768.0; // Met à jour la variable globale
 
-  if ((currentMotorPosDeg - previousMotorPosDeg) < -20.0) {
-    currentNumOfMotorRevol++;
-    currentMotorPosDeg = ((double)(currentNumOfMotorRevol)) * 360.0 + ((double)currentMotorPosEncoder) * 180.0 / 32768.0;
+    previousArmMotorPosDeg = currentArmMotorPosDeg; // Affecte à la position précédente la valeur de la position courante pour le prochain appel
   }
-  if ((currentMotorPosDeg - previousMotorPosDeg) > 20.0) {
-    currentNumOfMotorRevol--;
-    currentMotorPosDeg = ((double)(currentNumOfMotorRevol)) * 360.0 + ((double)currentMotorPosEncoder) * 180.0 / 32768.0;
-  }
+}
 
-  previousMotorPosDeg = currentMotorPosDeg; // writing in the global variable for next call
+void resetMotor(int motorID) {
+  /*
+  Commande l'arrêt du moteur puis son démarrage.
+  */
+
+  // Initialisation des variables moteurs
+  offsetArmMotorPosEncoder = 0; // In raw encoder units
+  currentNumOfArmMotorRevol = 0; // Number
+
+  currentArmMotorPosDeg = 0.0; // In degrees
+
+  // Send motor OFF then motor ON command to reset
+  motorOFF(motorID);
+  delay(500);
+  readMotorState(motorID);
+
+  // Attendre que l'utilisateur envoie 'S'
+  while (Serial.read() != 'S');
+
+  motorON(motorID);
+  readMotorState(motorID);
+  delay(500);
+  
+  sendVelocityCommand((long int)(0)); // Send 0
+  delay(500);
+  readMotorState(motorID); 
+
+  offsetMotorPosEncoder = currentMotorPosEncoder; // L'offset correspond à la valeur initiale 
+  currentNumOfMotorRevol = 0;
+  previousMotorPosDeg = 0.0;
+  sendVelocityCommand(motorID, (long int)(0));
+  delay(500);
+  readMotorState(motorID); 
+
+  Serial.println("End of Initialization routine.");
 }
 
 
