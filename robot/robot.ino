@@ -9,7 +9,17 @@
 #include <mcp2515_can.h>
 #include <mcp2515_can_dfs.h>
 #include <mcp_can.h>
+// Bus CAN
+#define MAX_DATA_SIZE 8
+#if defined(SEEED_WIO_TERMINAL) && defined(CAN_2518FD)
+  const int SPI_CS_PIN = BCM8;
+  const int CAN_INT_PIN = BCM25;
+#else
+  const int SPI_CS_PIN = 10; 
+  const int CAN_INT_PIN = 2;
+#endif
 #include "mcp2515_can.h"
+mcp2515_can CAN(SPI_CS_PIN);  // Set CS pin
 
 // For devices communication using the SPI bus
 #include <SPI.h>
@@ -22,15 +32,7 @@
 #define Broche_Echo 7 // Broche Echo du HC-SR04 sur D7
 #define Broche_Trigger 8 // Broche Trigger du HC-SR04 sur D8 
 
-// Bus CAN
-#define MAX_DATA_SIZE 8
-#if defined(SEEED_WIO_TERMINAL) && defined(CAN_2518FD)
-  const int SPI_CS_PIN = BCM8;
-  const int CAN_INT_PIN = BCM25;
-#else
-  const int SPI_CS_PIN = 10; 
-  const int CAN_INT_PIN = 2;
-#endif
+
  
 // Math (pourra servir)
 #define MY_PI 3.14159265359
@@ -39,9 +41,9 @@
 #define PERIOD_IN_MICROS 5000 // 5 ms
 
 // Moteurs
-#define MOTOR_ID_LEFT 11
-#define MOTOR_ID_RIGHT 12
-#define MOTOR_ID_ARM 41
+#define MOTOR_ID_LEFT 0x01
+#define MOTOR_ID_RIGHT 0x02
+#define MOTOR_ID_ARM 0x03
 
 #define MOTOR_ARM_MAX_POS_DEG 120.0 // À changer, butée logicielle pour le bras
 #define MOTOR_ARM_MIN_POS_DEG -120.0
@@ -66,10 +68,10 @@ double currentLeftMotorVel; // In degrees per seconds
 double currentRightMotorVel; // In degrees per seconds
 
 // Ports
-uint8_t analogPinP0 = A0; 
-uint8_t analogPinP1 = A2; 
-int currentP0Rawvalue;
-int currentP1Rawvalue;
+// uint8_t analogPinP0 = A0; 
+// uint8_t analogPinP1 = A2; 
+// int currentP0Rawvalue;
+// int currentP1Rawvalue;
 
 // Général
 int counterForPrinting;
@@ -89,10 +91,11 @@ void deplacementLineaire(float dist);
 void saisir();
 
 // Moteurs
-void motorON();
-void motorOFF();
+void motorON(int motorID);
+void motorOFF(int motorID);
 void sendVelocityCommand(long int vel); // This function sends a velocity command. Unit = hundredth of degree per second 
-void readMotorState();
+void readMotorState(int motorID);
+void resetMotor(int motorID);
 
 
 void setup() {
@@ -100,29 +103,18 @@ void setup() {
   // Capteurs
   MesureMaxi = 300;
   MesureMini = 3;
-  
-  //Bus CAN
-  mcp2515_can CAN(SPI_CS_PIN);  // Set CS pin
 
   /*************** MONITEUR SERIE ***************/
   // Initialization of the serial link
   Serial.begin(115200);
-  
+  Serial.println("FLAG1:");
   counterForPrinting = 0;
   printingPeriodicity = 10; // The variables will be sent to the serial link one out of printingPeriodicity loop runs. 
 
   /*************** BROCHES ***************/
   // Capteurs
-  pinMode(Broche_Trigger, OUTPUT); // Broche Trigger en sortie 
-  pinMode(Broche_Echo, INPUT); // Broche Echo en entree 
-
-  // Initialisation des broches analogiques d'entrée
-  pinMode(analogPinP0, INPUT);
-  pinMode(analogPinP1, INPUT);
-
-  // Lecture initiale
-  currentP0Rawvalue = analogRead(analogPinP0);
-  currentP1Rawvalue = analogRead(analogPinP1);
+  // pinMode(Broche_Trigger, OUTPUT); // Broche Trigger en sortie 
+  // pinMode(Broche_Echo, INPUT); // Broche Echo en entree 
 
   /*************** BUS CAN ***************/ 
   // Démarrage de la communication avec le bus CAN
@@ -131,16 +123,25 @@ void setup() {
     delay(500);
   } // On sort de la boucle si au moins un moteur à envoyé des données sur le bus CAN
 
+  if (CAN.begin(CAN_500KBPS) != CAN_OK) {
+  Serial.println("CAN initialization failed!");
+  delay(500);
+} else {
+  Serial.println("CAN initialization successful!");
+} 
+
   /*************** MOTEURS ***************/ 
+  Serial.println("FLAG2:");
   // Réinitialisation du moteur
   resetMotor(MOTOR_ID_LEFT);
   resetMotor(MOTOR_ID_RIGHT);
   resetMotor(MOTOR_ID_ARM);
-
   /*************** MESURES ***************/ 
   current_time = micros(); 
-  initial_time=current_time;
+  initial_time = current_time;
+  Serial.println("FLAG3:");
 }
+
 void loop() {
   /*
   AJOUTER COGNITION
@@ -148,56 +149,61 @@ void loop() {
 
   // Gestion de la boucle
   unsigned int sleep_time;
+
+  // Clock
   double elapsed_time_in_s;
   old_time = current_time;
   current_time = micros();
-  elapsed_time_in_s = (double)(current_time-initial_time);
+  elapsed_time_in_s = (double)(current_time - initial_time);
   elapsed_time_in_s *= 0.000001;
  
   /*************** MOTEURS ***************/
   // Pour le moment c'est pour tester
   // Activation des moteurs
-  sendVelocityCommand(MOTOR_ID_LEFT, 100);
+  sendVelocityCommand(MOTOR_ID_LEFT, 1000);
   readMotorState(MOTOR_ID_LEFT);
-  sendVelocityCommand(MOTOR_ID_RIGHT, 100);
+  delayMicroseconds(1000);
+  sendVelocityCommand(MOTOR_ID_RIGHT, 1000);
   readMotorState(MOTOR_ID_RIGHT);
-  sendVelocityCommand(MOTOR_ID_ARM, 100);
+  delayMicroseconds(1000);
+  sendVelocityCommand(MOTOR_ID_ARM, 1000);
   readMotorState(MOTOR_ID_ARM);
+  delayMicroseconds(1000);
 
   /*************** CAPTEURS ***************/ 
   // Pour le moment c'est pour tester
   // Debut de la mesure avec un signal de 10 µS applique sur TRIG 
-  digitalWrite(Broche_Trigger, LOW); // On efface l'etat logique de TRIG 
-  delayMicroseconds(2);
-  digitalWrite(Broche_Trigger, HIGH); // On met la broche TRIG a "1" pendant 10µS 
-  delayMicroseconds(10);
-  digitalWrite(Broche_Trigger, LOW); // On remet la broche TRIG a "0" 
+  // digitalWrite(Broche_Trigger, LOW); // On efface l'etat logique de TRIG 
+  // delayMicroseconds(2);
+  // digitalWrite(Broche_Trigger, HIGH); // On met la broche TRIG a "1" pendant 10µS 
+  // delayMicroseconds(10);
+  // digitalWrite(Broche_Trigger, LOW); // On remet la broche TRIG a "0" 
   
-  // On mesure combien de temps le niveau logique haut est actif sur ECHO 
-  Duree = pulseIn(Broche_Echo, HIGH);
-  // Calcul de la distance grace au temps mesure 
-  Distance = Duree * 0.034 / 2; // Calcul avec la vitesse du son
+  // // On mesure combien de temps le niveau logique haut est actif sur ECHO 
+  // Duree = pulseIn(Broche_Echo, HIGH);
+  // // Calcul de la distance grace au temps mesure 
+  // Distance = Duree * 0.034 / 2; // Calcul avec la vitesse du son
 
 
   /*************** AFFICHAGE ***************/
   counterForPrinting++;
   if (counterForPrinting > printingPeriodicity) {  // Reset the counter and print
     // Verification si valeur mesuree dans la plage //
-    if (Distance >= MesureMaxi || Distance <= MesureMini) {
-      // Si la distance est hors plage, on affiche un message d'erreur //
-      Serial.println("Distance de mesure en dehors de la plage (3 cm à 3 m)");
-    } else {
-      // Affichage dans le moniteur serie de la distance mesuree //
-      Serial.print("Distance mesuree :");
-      Serial.print(Distance);
-      Serial.println("cm");
-    }
-
+    // if (Distance >= MesureMaxi || Distance <= MesureMini) {
+    //   // Si la distance est hors plage, on affiche un message d'erreur //
+    //   Serial.println("Distance de mesure en dehors de la plage (3 cm à 3 m)");
+    // } else {
+    //   // Affichage dans le moniteur serie de la distance mesuree //
+    //   Serial.print("Distance mesuree :");
+    //   Serial.print(Distance);
+    //   Serial.println("cm");
+    // }
     counterForPrinting = 0;
     Serial.print("t:");
     Serial.println(elapsed_time_in_s);
   }
   
+
 
   
   // Patienter pour respecter la fréquence d'itération de la boucle
@@ -259,7 +265,7 @@ void sendVelocityCommand(int motorID, long int velocity) {
   unsigned char *adresse_low = (unsigned char *)(&local_velocity); // Convertit l'adresse de la vitesse en une chaine de caractère pour concorder avec la syntaxe du message à transmettre
 
   unsigned char msg[MAX_DATA_SIZE] = {
-    0xA2, // Valeur du potentiomètre ?
+    0xA2, 
     0x00,
     0x00,
     0x00,
@@ -290,8 +296,7 @@ void readMotorState(int motorID) {
   int currentMotorVelRaw;
 
   // Attend de réceptionner des données
-  while (CAN_MSGAVAIL != CAN.checkReceive());
-
+  while (CAN_MSGAVAIL != CAN.checkReceive())
   // Lis les données, len: data length, buf: data buf
   CAN.readMsgBuf(&len, cdata); // Écrit les valeurs du message transmis par le bus (données) CAN dans le buffer cdata
   id = CAN.getCanId(); // Récupère la valeur de l'ID du bus CAN depuis lequel les données sont reçues
@@ -305,16 +310,16 @@ void readMotorState(int motorID) {
   }
 
   // Convertit la vitesse brute en degrés par secondes
-  if (motorID == MOTOR_ID_LEFT) currentLeftMotorVelDegPerSec = (double)(currentMotorVelRaw); 
-  else if (motorID == MOTOR_ID_RIGHT) currentRightMotorVelDegPerSec = (double)(currentMotorVelRaw); 
-  else currentArmMotorVelDegPerSec = (double)(currentMotorVelRaw); 
+  if (motorID == MOTOR_ID_LEFT) currentLeftMotorVel = (double)(currentMotorVelRaw); 
+  else if (motorID == MOTOR_ID_RIGHT) currentRightMotorVel = (double)(currentMotorVelRaw); 
+  else currentArmMotorVel = (double)(currentMotorVelRaw); 
 
   if (motorID == MOTOR_ID_ARM) {
     // Déduction de la position en degré à partir de l'offset, du nombre de révolutions, et de la valeur brute en unité encodeur
-    currentArmMotorPosEncoder -= offsetArmMotorPosEnconder; // On adapte la position en fonction du décalage introduit initialement (position de départ)
+    currentArmMotorPosEncoder -= offsetArmMotorPosEncoder; // On adapte la position en fonction du décalage introduit initialement (position de départ)
     if ((currentArmMotorPosDeg - previousArmMotorPosDeg) < -20.0) currentNumOfArmMotorRevol++;
     else if ((currentArmMotorPosDeg - previousArmMotorPosDeg) > 20.0) currentNumOfArmMotorRevol--;
-    currentArmMotorPosDeg = double)(currentNumOfArmMotorRevol * 360.0 + ((double)currentArmMotorPosEncoder) * 180.0 / 32768.0; // Met à jour la variable globale
+    currentArmMotorPosDeg = (double)(currentNumOfArmMotorRevol * 360.0 + ((double)currentArmMotorPosEncoder) * 180.0 / 32768.0); // Met à jour la variable globale
 
     previousArmMotorPosDeg = currentArmMotorPosDeg; // Affecte à la position précédente la valeur de la position courante pour le prochain appel
   }
@@ -335,21 +340,20 @@ void resetMotor(int motorID) {
   motorOFF(motorID);
   delay(500);
   readMotorState(motorID);
-
   // Attendre que l'utilisateur envoie 'S'
-  while (Serial.read() != 'S');
+  //while (Serial.read() != 'S');
 
   motorON(motorID);
   readMotorState(motorID);
   delay(500);
   
-  sendVelocityCommand((long int)(0)); // Send 0
+  sendVelocityCommand(motorID, (long int)(0)); // Send 0
   delay(500);
   readMotorState(motorID); 
 
-  offsetMotorPosEncoder = currentMotorPosEncoder; // L'offset correspond à la valeur initiale 
-  currentNumOfMotorRevol = 0;
-  previousMotorPosDeg = 0.0;
+  offsetArmMotorPosEncoder = currentArmMotorPosEncoder; // L'offset correspond à la valeur initiale 
+  currentNumOfArmMotorRevol = 0;
+  previousArmMotorPosDeg = 0.0;
   sendVelocityCommand(motorID, (long int)(0));
   delay(500);
   readMotorState(motorID); 
