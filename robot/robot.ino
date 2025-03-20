@@ -41,6 +41,7 @@ mcp2515_can CAN(SPI_CS_PIN);  // Set CS pin
 #define PERIOD_IN_MICROS 5000 // 5 ms
 
 // Moteurs
+#define NB_OF_MOTORS 3 // Global motor variables array lenght, make sure ID matchs array boundaries as they will be used as index
 #define MOTOR_ID_LEFT 0x01
 #define MOTOR_ID_RIGHT 0x02
 #define MOTOR_ID_ARM 0x03
@@ -56,16 +57,14 @@ long Duree;
 long Distance;
 
 // Moteurs
-int currentArmMotorPosEncoder; // In raw encoder units
-int offsetArmMotorPosEncoder; // In raw encoder units
-int currentNumOfArmMotorRevol; // Number
+int absoluteMotorPosEncoder[NB_OF_MOTORS]; // In raw encoder units
+int offsetMotorPosEncoder[NB_OF_MOTORS]; // In raw encoder units
+int currentNumOfMotorRevol[NB_OF_MOTORS]; // Number
 
-double currentArmMotorPosDeg; // In degrees
-double previousArmMotorPosDeg; // In degrees
+double currentMotorPosDeg[NB_OF_MOTORS]; // In degrees
+double previousMotorPosDeg[NB_OF_MOTORS]; // In degrees
 
-double currentArmMotorVel; // In degrees per seconds
-double currentLeftMotorVel; // In degrees per seconds
-double currentRightMotorVel; // In degrees per seconds
+double currentMotorVel[NB_OF_MOTORS]; // In degrees per seconds
 
 // Ports
 // uint8_t analogPinP0 = A0; 
@@ -107,9 +106,8 @@ void setup() {
   /*************** MONITEUR SERIE ***************/
   // Initialization of the serial link
   Serial.begin(115200);
-  Serial.println("FLAG1:");
   counterForPrinting = 0;
-  printingPeriodicity = 10; // The variables will be sent to the serial link one out of printingPeriodicity loop runs. 
+  printingPeriodicity = 10; // The variables will be sent to the serial link one out of printingPeriodicity loop runs. Every 10 * PERIODS_IN_MICROS
 
   /*************** BROCHES ***************/
   // Capteurs
@@ -131,7 +129,6 @@ void setup() {
 } 
 
   /*************** MOTEURS ***************/ 
-  Serial.println("FLAG2:");
   // Réinitialisation du moteur
   resetMotor(MOTOR_ID_LEFT);
   resetMotor(MOTOR_ID_RIGHT);
@@ -139,7 +136,6 @@ void setup() {
   /*************** MESURES ***************/ 
   current_time = micros(); 
   initial_time = current_time;
-  Serial.println("FLAG3:");
 }
 
 void loop() {
@@ -293,7 +289,8 @@ void readMotorState(int motorID) {
   uint8_t len;
   byte cdata[MAX_DATA_SIZE] = {0}; // Déclare et remplit le tableau de 0, buffer utilisé pour receptionner les données
   int data2_3, data4_5, data6_7;
-  int currentMotorVelRaw;
+  int rawMotorVel;
+  int rawArmMotorPosEncoder;
 
   // Attend de réceptionner des données
   while (CAN_MSGAVAIL != CAN.checkReceive())
@@ -304,25 +301,24 @@ void readMotorState(int motorID) {
   
   if ((id - 0x140) == motorID) { // Si l'ID reçu correspond à celui du moteur
     data4_5 = cdata[4] + pow(2, 8) * cdata[5];
-    currentMotorVelRaw = (int)data4_5; // Calcul la vitesse brute
+    rawMotorVel = (int)data4_5; // Calcul la vitesse brute
     data6_7 = cdata[6] + pow(2, 8) * cdata[7];
-    if (motorID == MOTOR_ID_ARM) currentArmMotorPosEncoder = (int)data6_7;
+    rawArmMotorPosEncoder = (int)data6_7;
   }
 
   // Convertit la vitesse brute en degrés par secondes
-  if (motorID == MOTOR_ID_LEFT) currentLeftMotorVel = (double)(currentMotorVelRaw); 
-  else if (motorID == MOTOR_ID_RIGHT) currentRightMotorVel = (double)(currentMotorVelRaw); 
-  else currentArmMotorVel = (double)(currentMotorVelRaw); 
+  currentMotorVel[motorID - 1] = (double)rawMotorVel;
+  absoluteMotorPosEncoder[motorID - 1] = (double)rawArmMotorPosEncoder;
 
-  if (motorID == MOTOR_ID_ARM) {
-    // Déduction de la position en degré à partir de l'offset, du nombre de révolutions, et de la valeur brute en unité encodeur
-    currentArmMotorPosEncoder -= offsetArmMotorPosEncoder; // On adapte la position en fonction du décalage introduit initialement (position de départ)
-    if ((currentArmMotorPosDeg - previousArmMotorPosDeg) < -20.0) currentNumOfArmMotorRevol++;
-    else if ((currentArmMotorPosDeg - previousArmMotorPosDeg) > 20.0) currentNumOfArmMotorRevol--;
-    currentArmMotorPosDeg = (double)(currentNumOfArmMotorRevol * 360.0 + ((double)currentArmMotorPosEncoder) * 180.0 / 32768.0); // Met à jour la variable globale
+  // Déduction de la position en degré à partir de l'offset, du nombre de révolutions, et de la valeur brute en unité encodeur
+  absoluteMotorPosEncoder[motorID - 1] -= offsetMotorPosEncoder[motorID - 1]; // On adapte la position en fonction du décalage introduit initialement (position de départ)
+  if ((currentMotorPosDeg[motorID - 1] - previousMotorPosDeg[motorID - 1]) < -20.0) currentNumOfMotorRevol[motorID - 1]++;
+  else if ((currentMotorPosDeg[motorID - 1] - previousMotorPosDeg[motorID - 1]) > 20.0) currentNumOfMotorRevol[motorID - 1]--;
+  currentMotorPosDeg[motorID - 1] = (double)(currentNumOfMotorRevol[motorID - 1] * 360.0 + ((double)absoluteMotorPosEncoder[motorID - 1]) * 180.0 / 32768.0); // Met à jour la variable globale
 
-    previousArmMotorPosDeg = currentArmMotorPosDeg; // Affecte à la position précédente la valeur de la position courante pour le prochain appel
-  }
+  // Affecte à la position précédente la valeur de la position courante pour le prochain appel
+  previousMotorPosDeg[motorID - 1] = currentMotorPosDeg[motorID - 1];
+
 }
 
 void resetMotor(int motorID) {
@@ -331,10 +327,10 @@ void resetMotor(int motorID) {
   */
 
   // Initialisation des variables moteurs
-  offsetArmMotorPosEncoder = 0; // In raw encoder units
-  currentNumOfArmMotorRevol = 0; // Number
+  offsetMotorPosEncoder[motorID - 1] = 0; // In raw encoder units
+  currentNumOfMotorRevol[motorID - 1] = 0; // Number
 
-  currentArmMotorPosDeg = 0.0; // In degrees
+  currentMotorPosDeg[motorID - 1] = 0.0; // In degrees
 
   // Send motor OFF then motor ON command to reset
   motorOFF(motorID);
@@ -351,9 +347,9 @@ void resetMotor(int motorID) {
   delay(500);
   readMotorState(motorID); 
 
-  offsetArmMotorPosEncoder = currentArmMotorPosEncoder; // L'offset correspond à la valeur initiale 
-  currentNumOfArmMotorRevol = 0;
-  previousArmMotorPosDeg = 0.0;
+  offsetMotorPosEncoder[motorID - 1] = absoluteMotorPosEncoder[motorID - 1]; // L'offset correspond à la valeur initiale 
+  currentNumOfMotorRevol[motorID - 1] = 0; // Number
+  previousMotorPosDeg[motorID - 1] = 0.0;
   sendVelocityCommand(motorID, (long int)(0));
   delay(500);
   readMotorState(motorID); 
