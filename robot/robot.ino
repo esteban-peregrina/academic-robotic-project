@@ -195,13 +195,43 @@ void loop() {
     //   Serial.println("cm");
     // }
     counterForPrinting = 0;
+                    
+    Serial.println("--- Motor 1 ---");
     Serial.print("t:");
-    Serial.println(elapsed_time_in_s);
+    Serial.print(elapsed_time_in_s);
+    Serial.print("currentNumOfMotorRevol[0]:");
+    Serial.println(currentNumOfMotorRevol[0]);
+    Serial.print("currentMotorPosDeg[0]:");
+    Serial.print(currentMotorPosDeg[0]);
+    Serial.print("currentMotorVel[0]:");
+    Serial.print(currentMotorVel[0]);
+    Serial.println("---------------");
+
+    Serial.println("Motor 2 :");
+    Serial.print("t:");
+    Serial.print(elapsed_time_in_s);
+    Serial.print("currentNumOfMotorRevol[1]:");
+    Serial.print(currentNumOfMotorRevol[1]);
+    Serial.print("currentMotorPosDeg[1]:");
+    Serial.print(currentMotorPosDeg[1]);
+    Serial.print("currentMotorVel[1]:");
+    Serial.print(currentMotorVel[1]);
+    Serial.println("---------------");
+  
+    Serial.println("Motor 3 :");
+    Serial.print("t:");
+    Serial.print(elapsed_time_in_s);
+    Serial.print("currentNumOfMotorRevol[2]:");
+    Serial.print(currentNumOfMotorRevol[2]);
+    Serial.print("currentMotorPosDeg[2]:");
+    Serial.print(currentMotorPosDeg[2]);
+    Serial.print("currentMotorVel[2]:");
+    Serial.print(currentMotorVel[2]);
+    Serial.println("---------------");
   }
   
 
 
-  
   // Patienter pour respecter la fréquence d'itération de la boucle
   sleep_time = PERIOD_IN_MICROS - (micros() - current_time);
   if ( (sleep_time > 0) && (sleep_time < PERIOD_IN_MICROS) ) delayMicroseconds(sleep_time); // On patiente le temps restant pour respecter la fréquence d'itération (SUPPOSE QUE LES INSTRUCTIONS SONT RÉALISABLES DURANT LA PERIODE)
