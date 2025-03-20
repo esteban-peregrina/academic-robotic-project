@@ -107,7 +107,7 @@ void setup() {
   // Initialization of the serial link
   Serial.begin(115200);
   counterForPrinting = 0;
-  printingPeriodicity = 10; // The variables will be sent to the serial link one out of printingPeriodicity loop runs. Every 10 * PERIODS_IN_MICROS
+  printingPeriodicity = 100; // The variables will be sent to the serial link one out of printingPeriodicity loop runs. Every 10 * PERIODS_IN_MICROS
 
   /*************** BROCHES ***************/
   // Capteurs
@@ -198,35 +198,35 @@ void loop() {
                     
     Serial.println("--- Motor 1 ---");
     Serial.print("t:");
-    Serial.print(elapsed_time_in_s);
+    Serial.println(elapsed_time_in_s);
     Serial.print("currentNumOfMotorRevol[0]:");
     Serial.println(currentNumOfMotorRevol[0]);
     Serial.print("currentMotorPosDeg[0]:");
-    Serial.print(currentMotorPosDeg[0]);
+    Serial.println(currentMotorPosDeg[0]);
     Serial.print("currentMotorVel[0]:");
-    Serial.print(currentMotorVel[0]);
+    Serial.println(currentMotorVel[0]);
     Serial.println("---------------");
 
     Serial.println("Motor 2 :");
     Serial.print("t:");
-    Serial.print(elapsed_time_in_s);
+    Serial.println(elapsed_time_in_s);
     Serial.print("currentNumOfMotorRevol[1]:");
-    Serial.print(currentNumOfMotorRevol[1]);
+    Serial.println(currentNumOfMotorRevol[1]);
     Serial.print("currentMotorPosDeg[1]:");
-    Serial.print(currentMotorPosDeg[1]);
+    Serial.println(currentMotorPosDeg[1]);
     Serial.print("currentMotorVel[1]:");
-    Serial.print(currentMotorVel[1]);
+    Serial.println(currentMotorVel[1]);
     Serial.println("---------------");
   
     Serial.println("Motor 3 :");
     Serial.print("t:");
-    Serial.print(elapsed_time_in_s);
+    Serial.println(elapsed_time_in_s);
     Serial.print("currentNumOfMotorRevol[2]:");
-    Serial.print(currentNumOfMotorRevol[2]);
+    Serial.println(currentNumOfMotorRevol[2]);
     Serial.print("currentMotorPosDeg[2]:");
     Serial.print(currentMotorPosDeg[2]);
     Serial.print("currentMotorVel[2]:");
-    Serial.print(currentMotorVel[2]);
+    Serial.println(currentMotorVel[2]);
     Serial.println("---------------");
   }
   
