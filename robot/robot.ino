@@ -107,7 +107,7 @@ void setup() {
   // Initialization of the serial link
   Serial.begin(115200);
   counterForPrinting = 0;
-  printingPeriodicity = 100; // The variables will be sent to the serial link one out of printingPeriodicity loop runs. Every 10 * PERIODS_IN_MICROS
+  printingPeriodicity = 400; // The variables will be sent to the serial link one out of printingPeriodicity loop runs. Every printingPeriodicity * PERIODS_IN_MICROS
 
   /*************** BROCHES ***************/
   // Capteurs
@@ -120,13 +120,6 @@ void setup() {
     Serial.println("CAN initialization failed, trying again...");
     delay(500);
   } // On sort de la boucle si au moins un moteur à envoyé des données sur le bus CAN
-
-  if (CAN.begin(CAN_500KBPS) != CAN_OK) {
-  Serial.println("CAN initialization failed!");
-  delay(500);
-} else {
-  Serial.println("CAN initialization successful!");
-} 
 
   /*************** MOTEURS ***************/ 
   // Réinitialisation du moteur
@@ -205,7 +198,6 @@ void loop() {
     Serial.println(currentMotorPosDeg[0]);
     Serial.print("currentMotorVel[0]:");
     Serial.println(currentMotorVel[0]);
-    Serial.println("---------------");
 
     Serial.println("Motor 2 :");
     Serial.print("t:");
@@ -216,7 +208,6 @@ void loop() {
     Serial.println(currentMotorPosDeg[1]);
     Serial.print("currentMotorVel[1]:");
     Serial.println(currentMotorVel[1]);
-    Serial.println("---------------");
   
     Serial.println("Motor 3 :");
     Serial.print("t:");
@@ -224,10 +215,9 @@ void loop() {
     Serial.print("currentNumOfMotorRevol[2]:");
     Serial.println(currentNumOfMotorRevol[2]);
     Serial.print("currentMotorPosDeg[2]:");
-    Serial.print(currentMotorPosDeg[2]);
+    Serial.println(currentMotorPosDeg[2]);
     Serial.print("currentMotorVel[2]:");
     Serial.println(currentMotorVel[2]);
-    Serial.println("---------------");
   }
   
 
