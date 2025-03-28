@@ -10,16 +10,16 @@
 #include <mcp2515_can_dfs.h>
 #include <mcp_can.h>
 // Bus CAN
-#define MAX_DATA_SIZE 8
 #if defined(SEEED_WIO_TERMINAL) && defined(CAN_2518FD)
   const int SPI_CS_PIN = BCM8;
   const int CAN_INT_PIN = BCM25;
 #else
-  const int SPI_CS_PIN = 10; 
+  const int SPI_CS_PIN = 9; //ou 10
   const int CAN_INT_PIN = 2;
 #endif
 #include "mcp2515_can.h"
 mcp2515_can CAN(SPI_CS_PIN);  // Set CS pin
+#define MAX_DATA_SIZE 8
 
 // For devices communication using the SPI bus
 #include <SPI.h>
@@ -46,6 +46,8 @@ mcp2515_can CAN(SPI_CS_PIN);  // Set CS pin
 #define MOTOR_ID_RIGHT 0x02
 #define MOTOR_ID_ARM 0x03
 
+#define MOTOR_MAX_VEL_CMD 300000 
+#define MOTOR_MAX_VOLTAGE_CMD 200 
 #define MOTOR_ARM_MAX_POS_DEG 120.0 // À changer, butée logicielle pour le bras
 #define MOTOR_ARM_MIN_POS_DEG -120.0
 
@@ -77,6 +79,9 @@ int counterForPrinting;
 int printingPeriodicity;
 unsigned long current_time, old_time, initial_time;
 
+// Debugg
+
+
 /****************** DECLARATION DES FONCTIONS *********************/
 // Capteurs
 bool obstacleEnFace();
@@ -107,7 +112,7 @@ void setup() {
   // Initialization of the serial link
   Serial.begin(115200);
   counterForPrinting = 0;
-  printingPeriodicity = 400; // The variables will be sent to the serial link one out of printingPeriodicity loop runs. Every printingPeriodicity * PERIODS_IN_MICROS
+  printingPeriodicity = 50; // The variables will be sent to the serial link one out of printingPeriodicity loop runs. Every printingPeriodicity * PERIODS_IN_MICROS
 
   /*************** BROCHES ***************/
   // Capteurs
@@ -149,15 +154,15 @@ void loop() {
   /*************** MOTEURS ***************/
   // Pour le moment c'est pour tester
   // Activation des moteurs
-  sendVelocityCommand(MOTOR_ID_LEFT, 1000);
+  sendVelocityCommand(MOTOR_ID_LEFT, 100000);
   readMotorState(MOTOR_ID_LEFT);
-  delayMicroseconds(1000);
-  sendVelocityCommand(MOTOR_ID_RIGHT, 1000);
+  delayMicroseconds(10000);
+  sendVelocityCommand(MOTOR_ID_RIGHT, 100000);
   readMotorState(MOTOR_ID_RIGHT);
-  delayMicroseconds(1000);
-  sendVelocityCommand(MOTOR_ID_ARM, 1000);
+  delayMicroseconds(10000);
+  sendVelocityCommand(MOTOR_ID_ARM, 10000);
   readMotorState(MOTOR_ID_ARM);
-  delayMicroseconds(1000);
+  delayMicroseconds(10000);
 
   /*************** CAPTEURS ***************/ 
   // Pour le moment c'est pour tester
@@ -198,6 +203,8 @@ void loop() {
     Serial.println(currentMotorPosDeg[0]);
     Serial.print("currentMotorVel[0]:");
     Serial.println(currentMotorVel[0]);
+    Serial.print("offsetMotorPosEncoder[0]:");
+    Serial.println(offsetMotorPosEncoder[0]);
 
     Serial.println("Motor 2 :");
     Serial.print("t:");
@@ -208,6 +215,8 @@ void loop() {
     Serial.println(currentMotorPosDeg[1]);
     Serial.print("currentMotorVel[1]:");
     Serial.println(currentMotorVel[1]);
+    Serial.print("offsetMotorPosEncoder[1]:");
+    Serial.println(offsetMotorPosEncoder[1]);
   
     Serial.println("Motor 3 :");
     Serial.print("t:");
@@ -218,6 +227,8 @@ void loop() {
     Serial.println(currentMotorPosDeg[2]);
     Serial.print("currentMotorVel[2]:");
     Serial.println(currentMotorVel[2]);
+    Serial.print("offsetMotorPosEncoder[2]:");
+    Serial.println(offsetMotorPosEncoder[2]);
   }
   
 
@@ -275,8 +286,8 @@ void sendVelocityCommand(int motorID, long int velocity) {
   Précondition : La vitesse doit être exprimée en centième de degrés par seconde.
   */
 
-  long int local_velocity; // A SUPPRIMER ?
-  local_velocity = velocity; // A SUPPRIMER ?
+  long int local_velocity; 
+  local_velocity = velocity;
 
   unsigned char *adresse_low = (unsigned char *)(&local_velocity); // Convertit l'adresse de la vitesse en une chaine de caractère pour concorder avec la syntaxe du message à transmettre
 
@@ -306,38 +317,57 @@ void readMotorState(int motorID) {
   */
 
   uint32_t id;
+  uint8_t type;
   uint8_t len;
   byte cdata[MAX_DATA_SIZE] = {0}; // Déclare et remplit le tableau de 0, buffer utilisé pour receptionner les données
   int data2_3, data4_5, data6_7;
   int rawMotorVel;
-  int rawArmMotorPosEncoder;
+  int rawMotorPosEncoder;
 
   // Attend de réceptionner des données
-  while (CAN_MSGAVAIL != CAN.checkReceive())
+  while (CAN_MSGAVAIL != CAN.checkReceive());
   // Lis les données, len: data length, buf: data buf
   CAN.readMsgBuf(&len, cdata); // Écrit les valeurs du message transmis par le bus (données) CAN dans le buffer cdata
   id = CAN.getCanId(); // Récupère la valeur de l'ID du bus CAN depuis lequel les données sont reçues
-
+  type = (CAN.isExtendedFrame() << 0) | (CAN.isRemoteRequest() << 1);
   
   if ((id - 0x140) == motorID) { // Si l'ID reçu correspond à celui du moteur
     data4_5 = cdata[4] + pow(2, 8) * cdata[5];
     rawMotorVel = (int)data4_5; // Calcul la vitesse brute
     data6_7 = cdata[6] + pow(2, 8) * cdata[7];
-    rawArmMotorPosEncoder = (int)data6_7;
+    rawMotorPosEncoder = (int)data6_7;
   }
 
   // Convertit la vitesse brute en degrés par secondes
   currentMotorVel[motorID - 1] = (double)rawMotorVel;
-  absoluteMotorPosEncoder[motorID - 1] = (double)rawArmMotorPosEncoder;
+  
+  absoluteMotorPosEncoder[motorID - 1] = (double)rawMotorPosEncoder;
 
-  // Déduction de la position en degré à partir de l'offset, du nombre de révolutions, et de la valeur brute en unité encodeur
-  absoluteMotorPosEncoder[motorID - 1] -= offsetMotorPosEncoder[motorID - 1]; // On adapte la position en fonction du décalage introduit initialement (position de départ)
-  if ((currentMotorPosDeg[motorID - 1] - previousMotorPosDeg[motorID - 1]) < -20.0) currentNumOfMotorRevol[motorID - 1]++;
-  else if ((currentMotorPosDeg[motorID - 1] - previousMotorPosDeg[motorID - 1]) > 20.0) currentNumOfMotorRevol[motorID - 1]--;
-  currentMotorPosDeg[motorID - 1] = (double)(currentNumOfMotorRevol[motorID - 1] * 360.0 + ((double)absoluteMotorPosEncoder[motorID - 1]) * 180.0 / 32768.0); // Met à jour la variable globale
+  // // Déduction de la position en degré à partir de l'offset, du nombre de révolutions, et de la valeur brute en unité encodeur
+  // absoluteMotorPosEncoder[motorID - 1] -= offsetMotorPosEncoder[motorID - 1]; // On adapte la position en fonction du décalage introduit initialement (position de départ)
+  // if ((currentMotorPosDeg[motorID - 1] - previousMotorPosDeg[motorID - 1]) < -20.0) currentNumOfMotorRevol[motorID - 1]++;
+  // else if ((currentMotorPosDeg[motorID - 1] - previousMotorPosDeg[motorID - 1]) > 20.0) currentNumOfMotorRevol[motorID - 1]--;
+  // currentMotorPosDeg[motorID - 1] = currentNumOfMotorRevol[motorID - 1] * 360.0 + absoluteMotorPosEncoder[motorID - 1] * (180.0 / 32768.0); // Met à jour la variable globale
 
-  // Affecte à la position précédente la valeur de la position courante pour le prochain appel
-  previousMotorPosDeg[motorID - 1] = currentMotorPosDeg[motorID - 1];
+  // // Affecte à la position précédente la valeur de la position courante pour le prochain appel
+  // previousMotorPosDeg[motorID - 1] = currentMotorPosDeg[motorID - 1];
+
+
+
+
+  // Conversion of the position (with motor revolution counting) and wirting in the global variable
+  absoluteMotorPosEncoder[motorID - 1] -= offsetMotorPosEncoder[motorID - 1];
+  currentMotorPosDeg[motorID - 1] = ((double)(currentNumOfMotorRevol[motorID - 1]) * 360.0) + (((double)absoluteMotorPosEncoder[motorID - 1]) * 180.0 / 32768.0);  // On convertit en degré
+
+  if ((currentMotorPosDeg[motorID - 1] - previousMotorPosDeg[motorID - 1]) < -20.0) {
+    currentNumOfMotorRevol[motorID - 1]++;
+    currentMotorPosDeg[motorID - 1] = ((double)(currentNumOfMotorRevol[motorID - 1])) * 360.0 + ((double)absoluteMotorPosEncoder[motorID - 1]) * 180.0 / 32768.0;
+  }
+  if ((currentMotorPosDeg[motorID - 1] - previousMotorPosDeg[motorID - 1]) > 20.0) {
+    currentNumOfMotorRevol[motorID - 1]--;
+    currentMotorPosDeg[motorID - 1] = ((double)(currentNumOfMotorRevol[motorID - 1])) * 360.0 + ((double)absoluteMotorPosEncoder[motorID - 1]) * 180.0 / 32768.0;
+  }
+  previousMotorPosDeg[motorID - 1] = currentMotorPosDeg[motorID - 1]; // writing in the global variable for next call
 
 }
 
