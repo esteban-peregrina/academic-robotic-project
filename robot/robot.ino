@@ -203,6 +203,8 @@ void loop() {
     Serial.println(currentMotorPosDeg[0]);
     Serial.print("currentMotorVel[0]:");
     Serial.println(currentMotorVel[0]);
+    Serial.print("relativeMotorPosEncoder[0]:");
+    Serial.println(relativeMotorPosEncoder[0]);
     Serial.print("offsetMotorPosEncoder[0]:");
     Serial.println(offsetMotorPosEncoder[0]);
 
@@ -215,6 +217,8 @@ void loop() {
     Serial.println(currentMotorPosDeg[1]);
     Serial.print("currentMotorVel[1]:");
     Serial.println(currentMotorVel[1]);
+    Serial.print("relativeMotorPosEncoder[1]:");
+    Serial.println(relativeMotorPosEncoder[1]);
     Serial.print("offsetMotorPosEncoder[1]:");
     Serial.println(offsetMotorPosEncoder[1]);
   
@@ -227,6 +231,8 @@ void loop() {
     Serial.println(currentMotorPosDeg[2]);
     Serial.print("currentMotorVel[2]:");
     Serial.println(currentMotorVel[2]);
+    Serial.print("relativeMotorPosEncoder[2]:");
+    Serial.println(relativeMotorPosEncoder[2]);
     Serial.print("offsetMotorPosEncoder[2]:");
     Serial.println(offsetMotorPosEncoder[2]);
   }
@@ -349,16 +355,15 @@ void readMotorState(int motorID) {
 
   // Déduction de la position en degré à partir de l'offset, du nombre de révolutions, et de la valeur brute en unité encodeur
   relativeMotorPosEncoder[motorID - 1] -= offsetMotorPosEncoder[motorID - 1]; // On adapte la position en fonction du décalage introduit initialement (position de départ)
-  currentMotorPosDeg[motorID - 1] = ((double)(currentNumOfMotorRevol[motorID - 1])) * 360.0 + ((double)relativeMotorPosEncoder[motorID - 1]) * (180.0 / 32768.0);  // Met à jour la variable globale
+  currentMotorPosDeg[motorID - 1] = 180.0 + ((double)relativeMotorPosEncoder[motorID - 1]) * (180.0 / 32768.0);  // Met à jour la variable globale
 
-  if ((currentMotorPosDeg[motorID - 1] - previousMotorPosDeg[motorID - 1]) < -20.0) {
-    currentNumOfMotorRevol[motorID - 1]++;
-    currentMotorPosDeg[motorID - 1] = ((double)(currentNumOfMotorRevol[motorID - 1])) * 360.0 + ((double)relativeMotorPosEncoder[motorID - 1]) * (180.0 / 32768.0); // Met à jour la variable globale
+  double delta = currentMotorPosDeg[motorID - 1] - previousMotorPosDeg[motorID - 1];
+  if (delta > 180.0) {
+      currentNumOfMotorRevol[motorID - 1]--;
+  } else if (delta < -180.0) {
+      currentNumOfMotorRevol[motorID - 1]++;
   }
-  if ((currentMotorPosDeg[motorID - 1] - previousMotorPosDeg[motorID - 1]) > 20.0) {
-    currentNumOfMotorRevol[motorID - 1]--;
-    currentMotorPosDeg[motorID - 1] = ((double)(currentNumOfMotorRevol[motorID - 1])) * 360.0 + ((double)relativeMotorPosEncoder[motorID - 1]) * (180.0 / 32768.0); // Met à jour la variable globale
-  }
+
   // Affecte à la position précédente la valeur de la position courante pour le prochain appel
   previousMotorPosDeg[motorID - 1] = currentMotorPosDeg[motorID - 1]; // writing in the global variable for next call
 
