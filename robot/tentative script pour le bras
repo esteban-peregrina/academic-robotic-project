@@ -2,13 +2,19 @@
 Servo myservo;
 myservo.attach(5);  
 //dans setup () penser à avoir 2 couple echo/trig différents pcq on a 2 capteurs
-int TRIG_1 2
-int ECHO_1 3
+const int TRIG_1 2
+const int ECHO_1 3
+pinMode(TRIG_1, OUTPUT);
+pinMode(ECHO_1, INPUT);
+long Distance1=distancecm(2,3);
 
-int TRIG_2 4
-int ECHO_2 5
+const int TRIG_2 4
+const int ECHO_2 5
+pinMode(TRIG_2, OUTPUT);
+pinMode(ECHO_2, INPUT);
+long Distance2=distancecm(4,5);
 
-void Distance(int Broche_Trigger, int Broche_Echo) { 
+long distancecm(int Broche_Trigger, int Broche_Echo) { 
    digitalWrite(Broche_Trigger, LOW); 
    delayMicroseconds(5); 
    digitalWrite(Broche_Trigger, HIGH); 
@@ -17,12 +23,11 @@ void Distance(int Broche_Trigger, int Broche_Echo) {
    // Écoute de l'écho 
    Duree = pulseIn(Broche_Echo, HIGH); 
    // Calcul de la distance 
-   Distance = Duree*0.034/2; 
-   // Affichage de la distance dans le Moniteur Série 
-   Serial.print("Distance : "); 
-   Serial.print(Distance); 
-   Serial.println("cm"); 
+   Distance1 = Duree*0.034/2; 
+   return Distance1
 }
+
+
 
 void ArmCommand(int motorID){
   const float ANGLE_MAX      = ?;    // en degrés
@@ -44,7 +49,7 @@ void ArmCommand(int motorID){
     }
 
     // on lève le bras jusqu'à que la pince est au dessus du totem
-    if (Distance < distanceseuil) {
+    if (Distance1 < distanceseuil) {
       sendVelocityCommand(motorID, SPEED_CMD);
     }
     // quand la pince est finalement au dessus on cherche à atteindre un angle cible
