@@ -2,6 +2,11 @@
 Servo myservo;
 myservo.attach(5);  
 //dans setup () penser à avoir 2 couple echo/trig différents pcq on a 2 capteurs
+int TRIG_1 2
+int ECHO_1 3
+
+int TRIG_2 4
+int ECHO_2 5
 
 void Distance(int Broche_Trigger, int Broche_Echo) { 
    digitalWrite(Broche_Trigger, LOW); 
