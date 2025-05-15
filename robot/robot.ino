@@ -59,7 +59,7 @@ long Duree;
 long Distance;
 
 // Moteurs
-int absoluteMotorPosEncoder[NB_OF_MOTORS]; // In raw encoder units
+int relativeMotorPosEncoder[NB_OF_MOTORS]; // In raw encoder units
 int offsetMotorPosEncoder[NB_OF_MOTORS]; // In raw encoder units
 int currentNumOfMotorRevol[NB_OF_MOTORS]; // Number
 
@@ -154,15 +154,15 @@ void loop() {
   /*************** MOTEURS ***************/
   // Pour le moment c'est pour tester
   // Activation des moteurs
-  sendVelocityCommand(MOTOR_ID_LEFT, 1000);
+  sendVelocityCommand(MOTOR_ID_LEFT, 5000);
   readMotorState(MOTOR_ID_LEFT);
-  delayMicroseconds(10000);
-  sendVelocityCommand(MOTOR_ID_RIGHT, 1000);
+  delayMicroseconds(1000);
+  sendVelocityCommand(MOTOR_ID_RIGHT, -2500);
   readMotorState(MOTOR_ID_RIGHT);
-  delayMicroseconds(10000);
-  sendVelocityCommand(MOTOR_ID_ARM, 1000);
+  delayMicroseconds(1000);
+  sendVelocityCommand(MOTOR_ID_ARM, 1250);
   readMotorState(MOTOR_ID_ARM);
-  delayMicroseconds(10000);
+  delayMicroseconds(1000);
 
   /*************** CAPTEURS ***************/ 
   // Pour le moment c'est pour tester
@@ -176,7 +176,7 @@ void loop() {
   // // On mesure combien de temps le niveau logique haut est actif sur ECHO 
   // Duree = pulseIn(Broche_Echo, HIGH);
   // // Calcul de la distance grace au temps mesure 
-  // Distance = Duree * 0.034 / 2; // Calcul avec la vitesse du son
+  // Distance = Duree * 0.034 / 2; // Calcul à partir de la vitesse du son
 
 
   /*************** AFFICHAGE ***************/
@@ -286,6 +286,10 @@ void sendVelocityCommand(int motorID, long int velocity) {
   Précondition : La vitesse doit être exprimée en centième de degrés par seconde.
   */
 
+  if (abs(velocity) > MOTOR_MAX_VEL_CMD) {
+    velocity = (velocity > 0 ? MOTOR_MAX_VEL_CMD : -MOTOR_MAX_VEL_CMD);
+  }
+
   long int local_velocity; 
   local_velocity = velocity;
 
@@ -322,7 +326,7 @@ void readMotorState(int motorID) {
   byte cdata[MAX_DATA_SIZE] = {0}; // Déclare et remplit le tableau de 0, buffer utilisé pour receptionner les données
   int data2_3, data4_5, data6_7;
   int rawMotorVel;
-  int rawMotorPosEncoder;
+  int absoluteMotorPosEncoder;
 
   // Attend de réceptionner des données
   while (CAN_MSGAVAIL != CAN.checkReceive());
@@ -335,25 +339,25 @@ void readMotorState(int motorID) {
     data4_5 = cdata[4] + pow(2, 8) * cdata[5];
     rawMotorVel = (int)data4_5; // Calcul la vitesse brute
     data6_7 = cdata[6] + pow(2, 8) * cdata[7];
-    rawMotorPosEncoder = (int)data6_7;
+    absoluteMotorPosEncoder = (int)data6_7;
   }
 
   // Convertit la vitesse brute en degrés par secondes
   currentMotorVel[motorID - 1] = (double)rawMotorVel;
   
-  absoluteMotorPosEncoder[motorID - 1] = (double)rawMotorPosEncoder;
+  relativeMotorPosEncoder[motorID - 1] = (double)absoluteMotorPosEncoder;
 
   // Déduction de la position en degré à partir de l'offset, du nombre de révolutions, et de la valeur brute en unité encodeur
-  absoluteMotorPosEncoder[motorID - 1] -= offsetMotorPosEncoder[motorID - 1]; // On adapte la position en fonction du décalage introduit initialement (position de départ)
-  currentMotorPosDeg[motorID - 1] = ((double)(currentNumOfMotorRevol[motorID - 1])) * 360.0 + ((double)absoluteMotorPosEncoder[motorID - 1]) * (180.0 / 32768.0);  // Met à jour la variable globale
+  relativeMotorPosEncoder[motorID - 1] -= offsetMotorPosEncoder[motorID - 1]; // On adapte la position en fonction du décalage introduit initialement (position de départ)
+  currentMotorPosDeg[motorID - 1] = ((double)(currentNumOfMotorRevol[motorID - 1])) * 360.0 + ((double)relativeMotorPosEncoder[motorID - 1]) * (180.0 / 32768.0);  // Met à jour la variable globale
 
   if ((currentMotorPosDeg[motorID - 1] - previousMotorPosDeg[motorID - 1]) < -20.0) {
     currentNumOfMotorRevol[motorID - 1]++;
-    currentMotorPosDeg[motorID - 1] = ((double)(currentNumOfMotorRevol[motorID - 1])) * 360.0 + ((double)absoluteMotorPosEncoder[motorID - 1]) * (180.0 / 32768.0); // Met à jour la variable globale
+    currentMotorPosDeg[motorID - 1] = ((double)(currentNumOfMotorRevol[motorID - 1])) * 360.0 + ((double)relativeMotorPosEncoder[motorID - 1]) * (180.0 / 32768.0); // Met à jour la variable globale
   }
   if ((currentMotorPosDeg[motorID - 1] - previousMotorPosDeg[motorID - 1]) > 20.0) {
     currentNumOfMotorRevol[motorID - 1]--;
-    currentMotorPosDeg[motorID - 1] = ((double)(currentNumOfMotorRevol[motorID - 1])) * 360.0 + ((double)absoluteMotorPosEncoder[motorID - 1]) * (180.0 / 32768.0); // Met à jour la variable globale
+    currentMotorPosDeg[motorID - 1] = ((double)(currentNumOfMotorRevol[motorID - 1])) * 360.0 + ((double)relativeMotorPosEncoder[motorID - 1]) * (180.0 / 32768.0); // Met à jour la variable globale
   }
   // Affecte à la position précédente la valeur de la position courante pour le prochain appel
   previousMotorPosDeg[motorID - 1] = currentMotorPosDeg[motorID - 1]; // writing in the global variable for next call
@@ -386,7 +390,7 @@ void resetMotor(int motorID) {
   delay(500);
   readMotorState(motorID); 
 
-  offsetMotorPosEncoder[motorID - 1] = absoluteMotorPosEncoder[motorID - 1]; // L'offset correspond à la valeur initiale 
+  offsetMotorPosEncoder[motorID - 1] = relativeMotorPosEncoder[motorID - 1]; // L'offset correspond à la valeur initiale 
   currentNumOfMotorRevol[motorID - 1] = 0; // Number
   previousMotorPosDeg[motorID - 1] = 0.0;
   sendVelocityCommand(motorID, (long int)(0));
