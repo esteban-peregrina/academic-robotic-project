@@ -1,9 +1,9 @@
 // Dans setup()
 Servo myservo;
 myservo.attach(5);  
+//dans setup () penser à avoir 2 couple echo/trig différents pcq on a 2 capteurs
 
-
-void Distance() { 
+void Distance(int Broche_Trigger, int Broche_Echo) { 
    digitalWrite(Broche_Trigger, LOW); 
    delayMicroseconds(5); 
    digitalWrite(Broche_Trigger, HIGH); 
