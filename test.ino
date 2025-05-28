@@ -32,8 +32,8 @@ mcp2515_can CAN(SPI_CS_PIN);  // Set CS pin
 
 /****************** CONSTANTES *********************/
 // Capteurs
-#define Echo1 9// Broche Echo du HC-SR04 sur D7
-#define Trigger1 8 // Broche Trigger du HC-SR04 sur D8
+#define Echo1 3// Broche Echo du HC-SR04 sur D7
+#define Trigger1 4 // Broche Trigger du HC-SR04 sur D8
 #define Echo2 6 // Broche Echo du HC-SR04 sur D7
 #define Trigger2 7 // Broche Trigger du HC-SR04 sur D8
 
@@ -57,17 +57,9 @@ mcp2515_can CAN(SPI_CS_PIN);  // Set CS pin
 /****************** DECLARATION DES VARIABLES GLOBALES *********************/
 // Capteurs
 // Variables pour la gestion non bloquante des capteurs à ultrasons
-unsigned long previousMicros1 = 0;
-unsigned long previousMicros2 = 0;
-const long triggerDuration = 10; // Durée du signal Trigger en microsecondes
-bool triggerState1 = LOW;
-bool triggerState2 = LOW;
-bool measurementComplete1 = false;
-bool measurementComplete2 = false;
-unsigned long echoStart1 = 0;
-unsigned long echoStart2 = 0;
-unsigned long echoDuration1 = 0;
-unsigned long echoDuration2 = 0;
+unsigned long previousMillis = 0;
+const unsigned long interval = 500;
+//att
 long Distance1 = 0;
 long Distance2 = 0;
 
@@ -101,7 +93,7 @@ void saisir();
 // Moteurs
 void motorON(int motorID);
 void motorOFF(int motorID);
-void sendVelocityCommand(long int vel); // This function sends a velocity command. Unit = hundredth of degree per second
+void sendVelocityCommand(int motorID, long int velocity); // This function sends a velocity command. Unit = hundredth of degree per second
 void readMotorState(int motorID);
 void resetMotor(int motorID);
 
@@ -168,7 +160,7 @@ void loop() {
       if (temps_module < periode / 2) {
         consigne = 170;
       } else {
-        consigne = 90;
+        consigne = 100;
       }
       break;
 
@@ -183,12 +175,26 @@ void loop() {
     break;
   }
   double erreur = 150*(consigne - currentMotorPosDeg[2]);
-  if (Distance1 < 20) {
-      myservo.write(160);
+  
+  unsigned long currentMillis = millis();
+  if (currentMillis - previousMillis >= interval) {
+    previousMillis = currentMillis;
+
+    // Action non bloquante toutes les 3 secondes
+    capteur();
+    Serial.print("distance1 : ");
+    Serial.println(Distance1);
+    Serial.print(" ");
+    Serial.print("distance2 : ");
+    Serial.println(Distance2);
+    Serial.print(" ");
+    if (Distance1 < 20) {
+    myservo.write(120);
+  } else {
+    myservo.write(20);
   }
-  else {
-    myservo.write(0);
   }
+
   sendVelocityCommand(MOTOR_ID_ARM, erreur);
   readMotorState(MOTOR_ID_ARM);
 
@@ -245,13 +251,13 @@ void loop() {
     Serial.println(Distance1);
     Serial.print("Distance2 Capteur");
     Serial.println(Distance2);
-  }
+  }*/
 
   // Patienter pour respecter la fréquence d'itération de la boucle
   sleep_time = PERIOD_IN_MICROS - (micros() - current_time);
   if ( (sleep_time > 0) && (sleep_time < PERIOD_IN_MICROS) ) delayMicroseconds(sleep_time); // On patiente le temps restant pour respecter la fréquence d'itération (SUPPOSE QUE LES INSTRUCTIONS SONT RÉALISABLES DURANT LA PERIODE)
 } // FIN DE LA BOUCLE PRINCIPALE
-
+}
 /****************** IMPLEMENTATION DES FONCTIONS *********************/
 
 void motorON(int motorID) {
@@ -407,4 +413,23 @@ void resetMotor(int motorID) {
   readMotorState(motorID);
 
   Serial.println("End of Initialization routine.");
+}
+
+void capteur(){
+  digitalWrite(Trigger1, LOW);
+  delayMicroseconds(2);
+  digitalWrite(Trigger1, HIGH);
+  delayMicroseconds(10);
+  digitalWrite(Trigger1, LOW);
+
+  long durationcap = pulseIn(Echo1, HIGH);
+  Distance1 = durationcap * 0.034 / 2;
+  digitalWrite(Trigger2, LOW);
+  delayMicroseconds(2);
+  digitalWrite(Trigger2, HIGH);
+  delayMicroseconds(10);
+  digitalWrite(Trigger2, LOW);
+
+  durationcap = pulseIn(Echo2, HIGH);
+  Distance2 = durationcap * 0.034 / 2;
 }
