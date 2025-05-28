@@ -1,0 +1,29 @@
+Voici un résumé des commandes du robot via la variable inputString (reçue sur le port série) :
+
+  "T"
+    Bascule l’état du système (on/off).
+    
+    Si off : arrête les moteurs et affiche "System stopped."
+    Si on : démarre les moteurs et affiche "System started."
+  "left=XXX"
+    Définit la vitesse du moteur gauche (speed_LEFT) à la valeur XXX (après conversion).
+    Affiche la nouvelle valeur ou un message d’erreur si invalide.
+  "right=XXX"
+    Définit la vitesse du moteur droit (speed_RIGHT) à la valeur XXX (après conversion).
+    
+    Affiche la nouvelle valeur ou un message d’erreur si invalide.
+  "arm=XXX"
+    Définit la vitesse du moteur du bras (speed_ARM) à la valeur XXX (après conversion).
+    
+    Affiche la nouvelle valeur ou un message d’erreur si invalide.
+  "S"
+    Réinitialise les trois moteurs (gauche, droit, bras).
+    
+  "A"
+    Active ou désactive l’affichage périodique des valeurs des moteurs.
+    
+    Affiche "Affichage activé." ou "Affichage désactivé."
+Remarque :
+Chaque commande doit être envoyée suivie d’un saut de ligne (\n).
+Les valeurs numériques sont multipliées par 1 000 000 avant d’être utilisées.
+Les commandes sont traitées dans la boucle principale dès que la saisie est complète.
