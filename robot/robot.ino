@@ -48,13 +48,14 @@ mcp2515_can CAN(SPI_CS_PIN);  // Set CS pin
 
 #define MOTOR_MAX_VEL_CMD 300000
 #define MOTOR_MAX_VOLTAGE_CMD 200
-#define MOTOR_ARM_MAX_POS_DEG 120.0  // À changer, butée logicielle pour le bras
-#define MOTOR_ARM_MIN_POS_DEG -120.0
+#define MOTOR_ARM_MAX_POS_DEG 160.0  // À changer, butée logicielle pour le bras
+#define MOTOR_ARM_MIN_POS_DEG -120.0 
 
 /****************** DECLARATION DES VARIABLES GLOBALES *********************/
 // Etats du robot
 // 0 =
 // 1 =
+
 
 // Communication
 String inputString = "";      // Stocke la chaîne entrée par l'utilisateur
@@ -69,9 +70,11 @@ long Distance;
 
 // Moteurs
 bool systemRunning = true;
+int consigne_pos_ARM = 180;
 int speed_LEFT = 5000;
 int speed_RIGHT = -2500;
 int speed_ARM = 1250;
+int Gain_A = 100;
 int relativeMotorPosEncoder[NB_OF_MOTORS];  // In raw encoder units
 int offsetMotorPosEncoder[NB_OF_MOTORS];    // In raw encoder units
 int currentNumOfMotorRevol[NB_OF_MOTORS];   // Number
@@ -100,12 +103,16 @@ unsigned long current_time, old_time, initial_time;
 bool obstacleEnFace();
 bool obstacleADroite();
 
+// Calculs
+void CalculeArmCommand();
+
 // Déplacement
 void deplacementAngulaire(float deg);
 void deplacementLineaire(float dist);
 
 // Saisie
 void saisir();
+void display();  // Affiche les valeurs des moteurs dans le moniteur série
 
 // Moteurs
 void motorON(int motorID);
@@ -150,10 +157,6 @@ void setup() {
 }
 
 void loop() {
-  /*
-  AJOUTER COGNITION
-  */
-
   // Gestion de la boucle
   unsigned int sleep_time;
 
@@ -164,18 +167,34 @@ void loop() {
   elapsed_time_in_s = (double)(current_time - initial_time);
   elapsed_time_in_s *= 0.000001;
 
+  /*************** ASSERVISSEMENT ***************/
+  CalculeArmCommand();  // Appel de la fonction de calcul du mouvement, qui va mettre à jour les variables globales speed_LEFT, speed_RIGHT et speed_ARM
+
   /*************** MOTEURS ***************/
   // Pour le moment c'est pour tester
   // Activation des moteurs
-  sendVelocityCommand(MOTOR_ID_LEFT, speed_LEFT);  // Envoie la commande de vitesse au moteur gauche
-  readMotorState(MOTOR_ID_LEFT);
-  delayMicroseconds(1000);
-  sendVelocityCommand(MOTOR_ID_RIGHT, speed_RIGHT);  // Envoie la commande de vitesse au moteur droit
-  readMotorState(MOTOR_ID_RIGHT);
-  delayMicroseconds(1000);
-  sendVelocityCommand(MOTOR_ID_ARM, speed_ARM);  // Envoie la commande de vitesse au moteur du bras
-  readMotorState(MOTOR_ID_ARM);
-  delayMicroseconds(1000);
+  if (systemRunning) {
+    sendVelocityCommand(MOTOR_ID_LEFT, speed_LEFT);  // Envoie la commande de vitesse au moteur gauche
+    readMotorState(MOTOR_ID_LEFT);
+    delayMicroseconds(1000);
+    sendVelocityCommand(MOTOR_ID_RIGHT, speed_RIGHT);  // Envoie la commande de vitesse au moteur droit
+    readMotorState(MOTOR_ID_RIGHT);
+    delayMicroseconds(1000);
+    sendVelocityCommand(MOTOR_ID_ARM, speed_ARM);  // Envoie la commande de vitesse au moteur du bras
+    readMotorState(MOTOR_ID_ARM);
+    delayMicroseconds(1000);
+    // Si le système n'est pas en marche, on ne change pas la vitesse
+  } else {
+    sendVelocityCommand(MOTOR_ID_LEFT, 0);  // Envoie la commande de vitesse au moteur gauche
+    readMotorState(MOTOR_ID_LEFT);
+    delayMicroseconds(1000);
+    sendVelocityCommand(MOTOR_ID_RIGHT, 0);  // Envoie la commande de vitesse au moteur droit
+    readMotorState(MOTOR_ID_RIGHT);
+    delayMicroseconds(1000);
+    sendVelocityCommand(MOTOR_ID_ARM, 0);  // Envoie la commande de vitesse au moteur du bras
+    readMotorState(MOTOR_ID_ARM);
+    delayMicroseconds(1000);
+  }
 
   /*************** CAPTEURS ***************/
   // Pour le moment c'est pour tester
@@ -192,64 +211,7 @@ void loop() {
   // Distance = Duree * 0.034 / 2; // Calcul à partir de la vitesse du son
 
   /***********COMMANDES*SERIALS*************/
-  while (Serial.available()) {
-    char inChar = (char)Serial.read();
-    if (inChar == '\n') {
-      stringComplete = true;
-    } else {
-      inputString += inChar;
-    }
-  }
-  // Si une commande est complète, l'interpréter
-  if (stringComplete) {
-    if (inputString == "T") {
-      systemRunning = !systemRunning;  // Bascule l'état du système
-      if (!systemRunning) {
-        // motorOFF(1); // Arrête le moteur
-        // motorOFF(2); // Arrête le moteur
-        // motorOFF(3); // Arrête le moteur
-        Serial.println("System stopped.");
-      } else {
-        // motorON(1); // Redémarre le moteur
-        // motorON(2); // Redémarre le moteur
-        // motorON(3); // Redémarre le moteur
-        Serial.println("System started.");
-      }
-    } else if (inputString.startsWith("left=")) {
-      String MotorValueString = inputString.substring(5);  // Extrait la valeur après "P="
-      long int newCommand = MotorValueString.toInt();      // Convertit et ajuste l'unité
-
-      speed_LEFT = newCommand;
-      Serial.print("New left speed_LEFT value: ");
-      Serial.println(MotorValueString);
-    } else if (inputString.startsWith("right=")) {
-      String MotorValueString = inputString.substring(6);  // Extrait la valeur après "P="
-      long int newCommand = MotorValueString.toInt();      // Convertit et ajuste l'unité
-      speed_RIGHT = newCommand;
-      Serial.print("New right speed_RIGHT value: ");
-      Serial.println(MotorValueString);
-    } else if (inputString.startsWith("arm=")) {
-      String MotorValueString = inputString.substring(4);  // Extrait la valeur après "P="
-      long int newCommand = MotorValueString.toInt();      // Convertit et ajuste l'unité
-
-      speed_ARM = newCommand;
-      Serial.print("New arm speed_ARM value: ");
-      Serial.println(MotorValueString);
-    } else if (inputString == "S") {
-      resetMotor(MOTOR_ID_LEFT);
-      resetMotor(MOTOR_ID_RIGHT);
-      resetMotor(MOTOR_ID_ARM);
-    } else if (inputString == "A") {
-      affichage = !affichage;  // Bascule l'état d'affichage
-      if (affichage) {
-        Serial.println("Affichage activé.");
-      } else {
-        Serial.println("Affichage désactivé.");
-      }
-    }
-    inputString = "";  // Réinitialise la chaîne de commande
-    stringComplete = false;
-  }
+  saisir();  // Saisie de la commande utilisateur
   /*************** AFFICHAGE ***************/
   counterForPrinting++;
   if (counterForPrinting > printingPeriodicity) {  // Reset the counter and print
@@ -265,49 +227,7 @@ void loop() {
     // }
     counterForPrinting = 0;
     // Affichage des valeurs des moteurs
-    if (affichage) {
-      Serial.println("--- Motor 1 ---");
-      Serial.print("t:");
-      Serial.println(elapsed_time_in_s);
-      Serial.print("currentNumOfMotorRevol[0]:");
-      Serial.println(currentNumOfMotorRevol[0]);
-      Serial.print("currentMotorPosDeg[0]:");
-      Serial.println(currentMotorPosDeg[0]);
-      Serial.print("currentMotorVel[0]:");
-      Serial.println(currentMotorVel[0]);
-      Serial.print("relativeMotorPosEncoder[0]:");
-      Serial.println(relativeMotorPosEncoder[0]);
-      Serial.print("offsetMotorPosEncoder[0]:");
-      Serial.println(offsetMotorPosEncoder[0]);
-
-      Serial.println("--- Motor 2 ---");
-      Serial.print("t:");
-      Serial.println(elapsed_time_in_s);
-      Serial.print("currentNumOfMotorRevol[1]:");
-      Serial.println(currentNumOfMotorRevol[1]);
-      Serial.print("currentMotorPosDeg[1]:");
-      Serial.println(currentMotorPosDeg[1]);
-      Serial.print("currentMotorVel[1]:");
-      Serial.println(currentMotorVel[1]);
-      Serial.print("relativeMotorPosEncoder[1]:");
-      Serial.println(relativeMotorPosEncoder[1]);
-      Serial.print("offsetMotorPosEncoder[1]:");
-      Serial.println(offsetMotorPosEncoder[1]);
-
-      Serial.println("--- Motor 3 ---");
-      Serial.print("t:");
-      Serial.println(elapsed_time_in_s);
-      Serial.print("currentNumOfMotorRevol[2]:");
-      Serial.println(currentNumOfMotorRevol[2]);
-      Serial.print("currentMotorPosDeg[2]:");
-      Serial.println(currentMotorPosDeg[2]);
-      Serial.print("currentMotorVel[2]:");
-      Serial.println(currentMotorVel[2]);
-      Serial.print("relativeMotorPosEncoder[2]:");
-      Serial.println(relativeMotorPosEncoder[2]);
-      Serial.print("offsetMotorPosEncoder[2]:");
-      Serial.println(offsetMotorPosEncoder[2]);
-    }
+    
   }
 
 
@@ -356,11 +276,8 @@ void motorOFF(int motorID) {
   CAN.sendMsgBuf(0x140 + motorID, 0, 8, msg);  // Transmets le message au buffer du bus CAN, retourne CAN_OK ou CAN_FAIL
 }
 
-
 void sendVelocityCommand(int motorID, long int velocity) {
-  if (systemRunning == false) {
-    velocity = 0;  // Si le système n'est pas en marche, on ne change pas la vitesse
-  }
+
   /* 
   Envoie la commande de vitesse spécifiée au moteur identifié. 
 
@@ -390,7 +307,6 @@ void sendVelocityCommand(int motorID, long int velocity) {
 
   CAN.sendMsgBuf(0x140 + motorID, 0, 8, msg);  // Transmets le message au buffer du bus CAN, retourne CAN_OK ou CAN_FAIL
 }
-
 
 void readMotorState(int motorID) {
   /*
@@ -478,4 +394,138 @@ void resetMotor(int motorID) {
   readMotorState(motorID);
 
   Serial.println("End of Initialization routine.");
+}
+
+void saisir(){
+  while (Serial.available()) {
+    char inChar = (char)Serial.read();
+    if (inChar == '\n') {
+      stringComplete = true;
+    } else {
+      inputString += inChar;
+    }
+  }
+  // Si une commande est complète, l'interpréter
+  if (stringComplete) {
+    if (inputString == "T") {
+      systemRunning = !systemRunning;  // Bascule l'état du système
+      if (!systemRunning) {
+        // motorOFF(1); // Arrête le moteur
+        // motorOFF(2); // Arrête le moteur
+        // motorOFF(3); // Arrête le moteur
+        Serial.println("System stopped.");
+      } else {
+        // motorON(1); // Redémarre le moteur
+        // motorON(2); // Redémarre le moteur
+        // motorON(3); // Redémarre le moteur
+        Serial.println("System started.");
+      }
+    } else if (inputString.startsWith("left=")) {
+      String MotorValueString = inputString.substring(5);  // Extrait la valeur après "P="
+      long int newCommand = MotorValueString.toInt();      // Convertit et ajuste l'unité
+
+      speed_LEFT = newCommand;
+      Serial.print("New left speed_LEFT value: ");
+      Serial.println(MotorValueString);
+    } else if (inputString.startsWith("right=")) {
+      String MotorValueString = inputString.substring(6);  // Extrait la valeur après "P="
+      long int newCommand = MotorValueString.toInt();      // Convertit et ajuste l'unité
+      speed_RIGHT = newCommand;
+      Serial.print("New right speed_RIGHT value: ");
+      Serial.println(MotorValueString);
+    } else if (inputString.startsWith("arm=")) {
+      String MotorValueString = inputString.substring(4);  // Extrait la valeur après "P="
+      long int newCommand = MotorValueString.toInt();      // Convertit et ajuste l'unité
+
+      speed_ARM = newCommand;
+      Serial.print("New arm speed_ARM value: ");
+      Serial.println(MotorValueString);
+    } else if (inputString == "pos_arm=") {
+      String MotorValueString = inputString.substring(7);  // Extrait la valeur après "P="
+      long int consigne_pos_ARM = MotorValueString.toInt();
+      Serial.print("New consigne pos value:");
+      Serial.println(consigne_pos_ARM);
+      if (consigne_pos_ARM > MOTOR_ARM_MAX_POS_DEG) {
+        consigne_pos_ARM = MOTOR_ARM_MAX_POS_DEG;  // Limite la position maximale
+        Serial.print("Out of range:");
+      } else if (consigne_pos_ARM < MOTOR_ARM_MIN_POS_DEG) {
+        consigne_pos_ARM = MOTOR_ARM_MIN_POS_DEG;  // Limite la position minimale
+        Serial.print("Out of range:");
+      }   
+      
+    } else if (inputString == "S") {
+      resetMotor(MOTOR_ID_LEFT);
+      resetMotor(MOTOR_ID_RIGHT);
+      resetMotor(MOTOR_ID_ARM);
+    } else if (inputString == "A") {
+      affichage = !affichage;  // Bascule l'état d'affichage
+      if (affichage) {
+        Serial.println("Affichage activé.");
+      } else {
+        Serial.println("Affichage désactivé.");
+      }
+    } 
+    inputString = "";  // Réinitialise la chaîne de commande
+    stringComplete = false;
+  }
+}
+
+void display(){
+  if (affichage) {
+      Serial.println("--- Motor 1 ---");
+      Serial.print("t:");
+      Serial.println(elapsed_time_in_s);
+      Serial.print("currentNumOfMotorRevol[0]:");
+      Serial.println(currentNumOfMotorRevol[0]);
+      Serial.print("currentMotorPosDeg[0]:");
+      Serial.println(currentMotorPosDeg[0]);
+      Serial.print("currentMotorVel[0]:");
+      Serial.println(currentMotorVel[0]);
+      Serial.print("relativeMotorPosEncoder[0]:");
+      Serial.println(relativeMotorPosEncoder[0]);
+      Serial.print("offsetMotorPosEncoder[0]:");
+      Serial.println(offsetMotorPosEncoder[0]);
+
+      Serial.println("--- Motor 2 ---");
+      Serial.print("t:");
+      Serial.println(elapsed_time_in_s);
+      Serial.print("currentNumOfMotorRevol[1]:");
+      Serial.println(currentNumOfMotorRevol[1]);
+      Serial.print("currentMotorPosDeg[1]:");
+      Serial.println(currentMotorPosDeg[1]);
+      Serial.print("currentMotorVel[1]:");
+      Serial.println(currentMotorVel[1]);
+      Serial.print("relativeMotorPosEncoder[1]:");
+      Serial.println(relativeMotorPosEncoder[1]);
+      Serial.print("offsetMotorPosEncoder[1]:");
+      Serial.println(offsetMotorPosEncoder[1]);
+
+      Serial.println("--- Motor 3 ---");
+      Serial.print("t:");
+      Serial.println(elapsed_time_in_s);
+      Serial.print("currentNumOfMotorRevol[2]:");
+      Serial.println(currentNumOfMotorRevol[2]);
+      Serial.print("currentMotorPosDeg[2]:");
+      Serial.println(currentMotorPosDeg[2]);
+      Serial.print("currentMotorVel[2]:");
+      Serial.println(currentMotorVel[2]);
+      Serial.print("relativeMotorPosEncoder[2]:");
+      Serial.println(relativeMotorPosEncoder[2]);
+      Serial.print("offsetMotorPosEncoder[2]:");
+      Serial.println(offsetMotorPosEncoder[2]);
+
+      Serial.print("consigne_pos_arm:");
+      Serial.println(consigne_pos_ARM);
+      Serial.print("Speed_ARM:");
+      Serial.println(speed_ARM);
+
+    }
+}
+
+void CalculeArmCommand(){
+  // currentMotorPosDeg[2] = mesure de la position du bras
+  // consigne_pos_ARM = position du bras voulue
+  // speed_ARM = vitesse du bras imposée
+  double erreur = consigne_pos_ARM - currentMotorPosDeg[2];  // Erreur de position du bras
+  speed_ARM = Gain_A * erreur;  // Commande de vitesse proportionnelle à l'erreur
 }
