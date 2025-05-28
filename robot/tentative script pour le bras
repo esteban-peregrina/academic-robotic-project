@@ -4,11 +4,24 @@ myservo.attach(5);
 //dans setup () penser à avoir 2 couple echo/trig différents pcq on a 2 capteurs
 const int TRIG_1 2
 const int ECHO_1 3
-long Distance1=distancecm(2,3);
 
 const int TRIG_2 4
 const int ECHO_2 5
-long Distance2=distancecm(4,5);
+
+dans main
+  if(distancecm(TRIG_1, ECHO_1) < distanceseuil2 ){
+    sendVelocityCommand(MOTOR_ID_LEFT, 5000);
+    readMotorState(MOTOR_ID_LEFT);
+    delayMicroseconds(100);
+    sendVelocityCommand(MOTOR_ID_RIGHT, -5000);
+    readMotorState(MOTOR_ID_RIGHT);
+    delayMicroseconds(100);
+  }    
+  else{    
+    sendVelocityCommand(MOTOR_ID_RIGHT, 0);
+    sendVelocityCommand(MOTOR_ID_LEFT, 0);
+    ArmCommand(MOTOR_ID_ARM);
+  }
 
 float distancecm(const int Broche_Trigger, const int Broche_Echo) { 
    pinMode(Broche_Trigger, OUTPUT);
