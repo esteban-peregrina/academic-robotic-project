@@ -1,17 +1,13 @@
-// Dans setup()
+
 Servo myservo;
 myservo.attach(5);  
 //dans setup () penser à avoir 2 couple echo/trig différents pcq on a 2 capteurs
 const int TRIG_1 2
 const int ECHO_1 3
-pinMode(TRIG_1, OUTPUT);
-pinMode(ECHO_1, INPUT);
 long Distance1=distancecm(2,3);
 
 const int TRIG_2 4
 const int ECHO_2 5
-pinMode(TRIG_2, OUTPUT);
-pinMode(ECHO_2, INPUT);
 long Distance2=distancecm(4,5);
 
 float distancecm(const int Broche_Trigger, const int Broche_Echo) { 
