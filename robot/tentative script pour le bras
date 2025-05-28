@@ -28,55 +28,34 @@ float distancecm(const int Broche_Trigger, const int Broche_Echo) {
 
 
 void ArmCommand(int motorID){
-  const float ANGLE_MAX      = ?;    // en degrés
-  const long  ANGLE_MIN      = ?;   // en degrés
+  const float ANGLE_MAX      = 360;    // en degrés
+  const long  ANGLE_MIN      = 0;   // en degrés
   const float ANGLE_TOL      = 1.0;    // tolérance d'erreur en degrés
-  const long  SPEED_CMD      = ?;  // centi-deg/s
-  const float TARGET_ANGLE_ARM = 45.0; // angle cible en degrés
-  const float distanceseuil = ?; // distance capteur à laquelle le bras va s'arreter de se lever
-  double currentAngleArm = currentMotorPosDeg[2];
-  float error = TARGET_ANGLE_ARM - currentAngleArm;
-  while (true) {
-    float currentAngleArm = currentMotorPosDeg[2];
-    float error = TARGET_ANGLE_ARM - currentAngleArm;
+  const long  SPEED_CMD      = 10000;  // centi-deg/s
+  const float distanceseuil = 100.0; // distance capteur à laquelle le bras va s'arreter de se lever
+  float UpAngleArm ;
+  const float TARGET_ANGLE_ARM = UpAngleArm - 45.0 ; // angle cible en degrés
+  float error = TARGET_ANGLE_ARM - currentMotorPosDeg[2];
 
     // sécurité pur le bras
     if (currentAngleArm >= ANGLE_MAX || currentAngleArm <= ANGLE_MIN) {
       sendVelocityCommand(motorID, 0);
-      break;
     }
 
     // on lève le bras jusqu'à que la pince est au dessus du totem
-    if (Distance1 < distanceseuil) {
+    if (distancecm(TRIG_1,ECHO_1) < distanceseuil) {
       sendVelocityCommand(motorID, SPEED_CMD);
     }
     // quand la pince est finalement au dessus on cherche à atteindre un angle cible
     else {
       sendVelocityCommand(motorID, 0);
+      UpAngleArm = currentMotorPosDeg[2];
       delay(500);
       if (fabs(error) > ANGLE_TOL) {
         long cmd = (error > 0 ? SPEED_CMD : -SPEED_CMD);
         sendVelocityCommand(motorID, cmd);
       } else {
-        // angle atteint : on stoppe le bras
-        sendVelocityCommand(motorID, 0);
-
-        delay(500);
-
-        // faire avancer le robot légèrement
-        sendVelocityCommand(MOTOR_ID_RIGHT, 50);
-        sendVelocityCommand(MOTOR_ID_LEFT, 50);
-        delay(300); // avance pendant 300 ms
-        sendVelocityCommand(MOTOR_ID_RIGHT, 0);
-        sendVelocityCommand(MOTOR_ID_LEFT, 0);
-
-        // fermer la pince
-        myservo.write(160);
-
-        break; 
-      }
-    }
-
-    delay(20); 
+        return;
+      } 
   }
 }
