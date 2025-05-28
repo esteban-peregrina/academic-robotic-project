@@ -14,19 +14,21 @@ pinMode(TRIG_2, OUTPUT);
 pinMode(ECHO_2, INPUT);
 long Distance2=distancecm(4,5);
 
-long distancecm(int Broche_Trigger, int Broche_Echo) { 
+float distancecm(const int Broche_Trigger, const int Broche_Echo) { 
+   pinMode(Broche_Trigger, OUTPUT);
+   pinMode(Broche_Echo, INPUT);
    digitalWrite(Broche_Trigger, LOW); 
-   delayMicroseconds(5); 
+   delayMicroseconds(2); 
    digitalWrite(Broche_Trigger, HIGH); 
    delayMicroseconds(10); 
    digitalWrite(Broche_Trigger, LOW); 
    // Écoute de l'écho 
-   Duree = pulseIn(Broche_Echo, HIGH); 
+   long Duree = pulseIn(Broche_Echo, HIGH); 
    // Calcul de la distance 
-   Distance1 = Duree*0.034/2; 
-   return Distance1
+   long Distance1 = Duree*0.034/2;
+   delay(10); 
+   return Distance1;
 }
-
 
 
 void ArmCommand(int motorID){
