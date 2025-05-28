@@ -9,6 +9,7 @@ const int TRIG_2 4
 const int ECHO_2 5
 
 dans main
+  const float distanceseuil2 = 20.0;
   if(distancecm(TRIG_1, ECHO_1) < distanceseuil2 ){
     sendVelocityCommand(MOTOR_ID_LEFT, 5000);
     readMotorState(MOTOR_ID_LEFT);
