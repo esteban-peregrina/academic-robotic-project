@@ -22,16 +22,6 @@
 #include <math.h>
 
 /****************** CONSTANTES *********************/
-// Capteurs
-// // HC-SR04
-// #define NB_OF_SENSORS 2
-// #define SENSOR_ECHO_PIN_RIGHT 6
-// #define SENSOR_TRIGGER_PIN_RIGHT 7
-// #define SENSOR_ECHO_PIN_FRONT 3
-// #define SENSOR_TRIGGER_PIN_FRONT 4
-// const int triggerPins[NB_OF_SENSORS] = {SENSOR_TRIGGER_PIN_FRONT, SENSOR_TRIGGER_PIN_RIGHT};
-// const int echoPins[NB_OF_SENSORS] = {SENSOR_ECHO_PIN_FRONT, SENSOR_ECHO_PIN_RIGHT};
-
 // Math (pourra servir)
 #define MY_PI 3.14159265359
 
@@ -42,12 +32,6 @@
 // Robot
 const float robotWheelRadius = 0.0225; // Radius of the wheels in meters
 const float robotWheelDistance = 0.15; // Distance between the wheels in meters
-
-// Ports
-// uint8_t analogPinP0 = A0; 
-// uint8_t analogPinP1 = A2; 
-// int currentP0Rawvalue;
-// int currentP1Rawvalue;
 
 // Général
 int counterForPrinting;
@@ -145,6 +129,7 @@ void loop() {
 
   /*************** CAPTEURS ***************/ 
   if (SENSE) {
+    // TODO : Fonctionnaliser dans sensors.cpp et ne faire que deux appels ppur màj le tableau
     int Duree;
     for (int i = 0; i < NB_OF_SENSORS; i++) {
       // Emission d'un signal ultrasonnore de 10 µS par TRIG 
@@ -170,12 +155,12 @@ void loop() {
     }
   }
   
-  // Patienter pour respecter la fréquence d'itération de la boucle
+  // Patienter pour respecter le cadencement de la boucle
   sleep_time = PERIOD_IN_MICROS - (micros() - current_time);
   if ( (sleep_time > 0) && (sleep_time < PERIOD_IN_MICROS) ) delayMicroseconds(sleep_time); // On patiente le temps restant pour respecter la fréquence d'itération (SUPPOSE QUE LES INSTRUCTIONS SONT RÉALISABLES DURANT LA PERIODE)
 } // FIN DE LA BOUCLE PRINCIPALE
 
-
+// TODO : À bouger dans un fichier à part
 void setRobotVelocity(float linearVelocity, float angularVelocity) {
   /*
   Calcul la cinématique inverse pour définir la vitesse des moteurs gauche et droit du robot en fonction de la vitesse linéaire et angulaire souhaitée.
