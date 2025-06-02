@@ -5,9 +5,8 @@
 
 /****************** DEV *********************/
 #define SPEAK 1
-#define MOVE 0
+#define MOVE 1
 #define SENSE 1
-
 
 /****************** BIBLIOTHÈQUES *********************/
 // Project
@@ -54,7 +53,6 @@ void saisir();
 
 // Affichage
 void printData(double elapsedTime);
-
 
 void setup() {
   /*************** MONITEUR SERIE ***************/
@@ -116,15 +114,16 @@ void loop() {
   if (MOVE) {
     // Pour le moment c'est pour tester
     // Activation des moteurs
-    sendVelocityCommand(MOTOR_ID_LEFT, 5000);
-    readMotorState(MOTOR_ID_LEFT);
-    delayMicroseconds(1000);
-    sendVelocityCommand(MOTOR_ID_RIGHT, -2500);
-    readMotorState(MOTOR_ID_RIGHT);
-    delayMicroseconds(1000);
-    sendVelocityCommand(MOTOR_ID_ARM, 1250);
-    readMotorState(MOTOR_ID_ARM);
-    delayMicroseconds(1000);
+    // sendVelocityCommand(MOTOR_ID_LEFT, 5000);
+    // readMotorState(MOTOR_ID_LEFT);
+    // delayMicroseconds(1000);
+    // sendVelocityCommand(MOTOR_ID_RIGHT, -2500);
+    // readMotorState(MOTOR_ID_RIGHT);
+    // delayMicroseconds(1000);
+    // sendVelocityCommand(MOTOR_ID_ARM, 1250);
+    // readMotorState(MOTOR_ID_ARM);
+    // delayMicroseconds(1000);
+    setRobotVelocity(10, 10);
   }
 
   /*************** CAPTEURS ***************/ 
@@ -169,8 +168,8 @@ void setRobotVelocity(float linearVelocity, float angularVelocity) {
   */
 
   long int leftMotorVel, rightMotorVel; // Dans nos équations, q1 = vitesse du moteur droit, q2 = vitesse du moteur gauche 
-  leftMotorVel = -1 / robotWheelRadius * linearVelocity - (robotWheelDistance / (2.0 * robotWheelRadius)) * angularVelocity;
-  rightMotorVel = 1 / robotWheelRadius * linearVelocity - (robotWheelDistance / (2.0 * robotWheelRadius)) * angularVelocity;
+  leftMotorVel = 1 / robotWheelRadius * linearVelocity + (robotWheelDistance / (2.0 * robotWheelRadius)) * angularVelocity;
+  rightMotorVel = -1 / robotWheelRadius * linearVelocity + (robotWheelDistance / (2.0 * robotWheelRadius)) * angularVelocity;
 
   // Envoie les commandes de vitesse aux moteurs
   sendVelocityCommand(MOTOR_ID_LEFT, leftMotorVel * (100.0 / MY_PI)); // Convertit la vitesse en centième de degrés par seconde
@@ -184,7 +183,7 @@ void setRobotVelocity(float linearVelocity, float angularVelocity) {
 
 void printData(double elapsedTime) {
   /*************** MOTEURS ***************/
-  if (!MOVE) {      
+  if (MOVE) {      
     for (int i = 0; i < NB_OF_MOTORS; i++) {            
       Serial.println("--- Motor " + String(i+1) + " ---");
       Serial.print("t:");

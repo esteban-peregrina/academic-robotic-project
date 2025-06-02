@@ -6,7 +6,6 @@ int relativeMotorPosEncoder[NB_OF_MOTORS] = {0};
 int offsetMotorPosEncoder[NB_OF_MOTORS] = {0};
 int currentNumOfMotorRevol[NB_OF_MOTORS] = {0};
 
-
 double currentMotorPosDeg[NB_OF_MOTORS] = {0.0};
 double previousMotorPosDeg[NB_OF_MOTORS] = {0.0};
 
@@ -67,11 +66,15 @@ void resetMotor(int motorID) {
     // Send motor OFF then motor ON command to reset
     motorOFF(motorID);
     delay(500);
-    readMotorState(motorID);
+    if (readMotorState(motorID) == -1) {
+      Serial.println("Motor " + String(motorID) + " did not answered.");
+      return;
+    };
     motorON(motorID);
     readMotorState(motorID);
     delay(500);
-    
+
+    // Send null velocity
     sendVelocityCommand(motorID, (long int)(0)); // Send 0
     delay(500);
     readMotorState(motorID); 
@@ -86,7 +89,7 @@ void resetMotor(int motorID) {
     Serial.println("Motor " + String(motorID) + " was successfully reset.");
   }
   
-void readMotorState(int motorID) {
+int readMotorState(int motorID) {
     /*
     Récupère l'état du moteur identifié via les mesures de l'encodeur, et met à jour la valeur des variables globales suivantes :
     - currentNumOfMotorRevol : Nombre de révolutions du moteur (valeur précédente +/- 1 selon si une révolution à été observé par l'encodeur)
@@ -102,9 +105,15 @@ void readMotorState(int motorID) {
     int data2_3, data4_5, data6_7;
     int rawMotorVel;
     int absoluteMotorPosEncoder;
-  
+
+    int timeout;
+
     // Attend de réceptionner des données
-    while (CAN_MSGAVAIL != CAN.checkReceive());
+    while (CAN_MSGAVAIL != CAN.checkReceive() && timeout < 5000) {
+      delayMicroseconds(1000);
+      timeout++;
+    }
+    if (timeout > 5000) return -1;
     // Lis les données, len: data length, buf: data buf
     CAN.readMsgBuf(&len, cdata); // Écrit les valeurs du message transmis par le bus (données) CAN dans le buffer cdata
     id = CAN.getCanId(); // Récupère la valeur de l'ID du bus CAN depuis lequel les données sont reçues
@@ -135,7 +144,8 @@ void readMotorState(int motorID) {
   
     // Affecte à la position précédente la valeur de la position courante pour le prochain appel
     previousMotorPosDeg[motorID - 1] = currentMotorPosDeg[motorID - 1]; // writing in the global variable for next call
-  
+
+    return 0;
   }
   
 void sendVelocityCommand(int motorID, long int velocity) {

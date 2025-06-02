@@ -26,7 +26,7 @@ extern double currentMotorVel[NB_OF_MOTORS]; // In degrees per seconds
 void motorON(int motorID);
 void motorOFF(int motorID);
 void resetMotor(int motorID);
-void readMotorState(int motorID);
+int readMotorState(int motorID); // Return -1 in case of failure
 void sendVelocityCommand(int motorID, long int velocity); // Sends a velocity command to motor. Unit = hundredth of degree per second
 void motorsInitialization(); 
 
