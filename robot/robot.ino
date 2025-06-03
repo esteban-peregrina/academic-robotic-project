@@ -7,6 +7,7 @@
 #define SPEAK 1
 #define MOVE 1
 #define SENSE 1
+#define PINCE 1
 
 /****************** BIBLIOTHÈQUES *********************/
 // Project
@@ -14,6 +15,8 @@
 #include "sensors.h"
 #include "motors.h"
 
+#include <Servo.h>
+Servo myservo;
 // For devices communication using the SPI bus
 #include <SPI.h>
 
@@ -95,6 +98,12 @@ void setup() {
     pinMode(SENSOR_ECHO_PIN_FRONT, INPUT); 
   }
 
+  if(PINCE){
+    // Création servo de la pince
+    myservo.attach(SERVO_TRIGGER_PIN);  
+    pinMode(SERVO_FEEDBACK_PIN, INPUT);
+  }
+  
   /*************** MESURES ***************/ 
   current_time = micros(); 
   initial_time = current_time;
@@ -111,7 +120,6 @@ void loop() {
 
   // Gestion de la boucle
   unsigned int sleep_time;
-
   // Clock
   double elapsed_time_in_s;
   old_time = current_time;
@@ -151,7 +159,15 @@ void loop() {
 
     robotWallOffsetMeasure = measuredLenght[1]; // On récupère la mesure du capteur latéral pour l'asservissement de distance
   }
-
+  
+  if (PINCE) { 
+    int feedbackValue = analogRead(SERVO_FEEDBACK_PIN);
+    float angle = map(feedbackValue, 94, 383, 0, 180);
+    Serial.print("Retour pince (angle estimé) : ");
+    Serial.println(angle);
+    // SI IL DETECTE UN ANGLE ENTRE 175 et 120 
+    // pendant 1 seconde il a choppé le totem !
+  }
   /*************** AFFICHAGE ***************/
   if (SPEAK) {
     counterForPrinting++;
@@ -217,11 +233,32 @@ void printData(double elapsedTime) {
       if (Distance <= MesureMaxi && Distance >= MesureMini) {
         // Affichage dans le moniteur serie de la distance mesuree //
         Serial.println("Distance : " + String(i) + ": " + String(Distance) + "cm");
+        if(i==0){ //si c'est le capteur 0
+          if(Distance >= MesureMaxi/2){
+            myservo.write(60);
+            Serial.println("Commande = 60 servo");
+          }
+          else{
+            myservo.write(150);
+            Serial.println("Commande = 150 servo");
+          }
+        }
       } else {
         // Si la distance est hors plage, on affiche un message d'erreur
-        Serial.println("Hors plage");
+        if(i==0){
+          Serial.println("Hors plage");
+          myservo.write(0);
+        }
       }
     }
+  }
+
+   /*************** Asservissement ***************/
+  if (MOVE) {  
+      Serial.println("--- Asservissement ---");    
+      Serial.println ("Erreur : " + String(robotWallOffsetError));   
+      Serial.println("Intégrale de l'erreur : " + String(robotWallOffsetErrorIntegrated));       
+      Serial.println("Commande : " + String(robotAngularVelocityCommand));
   }
 
    /*************** Asservissement ***************/
