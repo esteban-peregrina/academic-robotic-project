@@ -37,6 +37,14 @@ int counterForPrinting;
 const int printingPeriodicity = 100; // The variables will be sent to the serial link one out of printingPeriodicity loop runs. Every printingPeriodicity * PERIODS_IN_MICROS
 unsigned long current_time, old_time, initial_time;
 
+// Temporairement placées ici
+int robotWallOffsetSetpoint = 10; // cm
+int robotWallOffsetMeasure = 0;
+const float correctorGain = 0.1;
+int robotWallOffsetError = 0;
+float robotAngularVelocityCommand = 0.0;
+
+
 /****************** DECLARATION DES FONCTIONS *********************/
 // Capteurs
 bool obstacleEnFace();
@@ -111,19 +119,10 @@ void loop() {
   elapsed_time_in_s *= 0.000001;
  
   /*************** MOTEURS ***************/
-  if (MOVE) {
-    // Pour le moment c'est pour tester
-    // Activation des moteurs
-    // sendVelocityCommand(MOTOR_ID_LEFT, 5000);
-    // readMotorState(MOTOR_ID_LEFT);
-    // delayMicroseconds(1000);
-    // sendVelocityCommand(MOTOR_ID_RIGHT, -2500);
-    // readMotorState(MOTOR_ID_RIGHT);
-    // delayMicroseconds(1000);
-    // sendVelocityCommand(MOTOR_ID_ARM, 1250);
-    // readMotorState(MOTOR_ID_ARM);
-    // delayMicroseconds(1000);
-    setRobotVelocity(10, 10);
+  if (MOVE) {    
+    robotWallOffsetError = robotWallOffsetSetpoint - robotWallOffsetMeasure; // Erreur de position du robot par rapport au mur
+    robotAngularVelocityCommand = correctorGain * (float)robotWallOffsetError;
+    setRobotVelocity(0.1, -1 * robotAngularVelocityCommand); // On assigne une vitesse linéaire de 20 cm/s et une vitesse angulaire proportionnelle à l'erreur de position du robot par rapport au mur (0.01 rad/cm)
   }
 
   /*************** CAPTEURS ***************/ 
@@ -143,6 +142,8 @@ void loop() {
       measuredLenght[i] = Duree * 0.034 / 2; // Calcul de la distance grace au temps mesure (à partir de la vitesse du son)
       delayMicroseconds(1000);
     }
+
+    robotWallOffsetMeasure = measuredLenght[1]; // On récupère la mesure du capteur latéral pour l'asservissement de distance
   }
 
   /*************** AFFICHAGE ***************/
@@ -168,14 +169,14 @@ void setRobotVelocity(float linearVelocity, float angularVelocity) {
   */
 
   long int leftMotorVel, rightMotorVel; // Dans nos équations, q1 = vitesse du moteur droit, q2 = vitesse du moteur gauche 
-  leftMotorVel = 1 / robotWheelRadius * linearVelocity + (robotWheelDistance / (2.0 * robotWheelRadius)) * angularVelocity;
-  rightMotorVel = -1 / robotWheelRadius * linearVelocity + (robotWheelDistance / (2.0 * robotWheelRadius)) * angularVelocity;
+  leftMotorVel = (long int) ( ((1.0 / robotWheelRadius) * linearVelocity + (robotWheelDistance / ( 2.0 * robotWheelRadius)) * angularVelocity) * (100.0 * 180.0 / MY_PI)); // Convertit la vitesse en centième de degrés par seconde
+  rightMotorVel = (long int) ( ((-1.0 / robotWheelRadius) * linearVelocity + (robotWheelDistance / ( 2.0 * robotWheelRadius)) * angularVelocity) * (100.0 * 180.0 / MY_PI)); // Convertit la vitesse en centième de degrés par seconde
 
   // Envoie les commandes de vitesse aux moteurs
-  sendVelocityCommand(MOTOR_ID_LEFT, leftMotorVel * (100.0 / MY_PI)); // Convertit la vitesse en centième de degrés par seconde
+  sendVelocityCommand(MOTOR_ID_LEFT, leftMotorVel); 
   readMotorState(MOTOR_ID_LEFT);
   delayMicroseconds(1000);
-  sendVelocityCommand(MOTOR_ID_RIGHT, rightMotorVel * (100.0 / MY_PI)); // Convertit la vitesse en centième de degrés par seconde
+  sendVelocityCommand(MOTOR_ID_RIGHT, rightMotorVel); 
   readMotorState(MOTOR_ID_RIGHT);
   delayMicroseconds(1000);
 
@@ -215,5 +216,12 @@ void printData(double elapsedTime) {
         Serial.println("Hors plage");
       }
     }
+  }
+
+   /*************** Asservissement ***************/
+  if (MOVE) {  
+      Serial.println("--- Asservissement ---");    
+      Serial.println ("Erreur :" + String(robotWallOffsetError));          
+      Serial.println("Commande :" + String(robotAngularVelocityCommand));
   }
 }
