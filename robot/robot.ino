@@ -43,7 +43,8 @@ int robotWallOffsetMeasure = 0;
 const float correctorGain = 0.1;
 int robotWallOffsetError = 0;
 float robotAngularVelocityCommand = 0.0;
-
+float robotWallOffsetErrorIntegrated = 0.0;
+const float correctorIntegralGain = 0.01; 
 
 /****************** DECLARATION DES FONCTIONS *********************/
 // Capteurs
@@ -121,7 +122,12 @@ void loop() {
   /*************** MOTEURS ***************/
   if (MOVE) {    
     robotWallOffsetError = robotWallOffsetSetpoint - robotWallOffsetMeasure; // Erreur de position du robot par rapport au mur
-    robotAngularVelocityCommand = correctorGain * (float)robotWallOffsetError;
+    robotWallOffsetErrorIntegrated += (double)robotWallOffsetError * elapsed_time_in_s;
+    if (robotWallOffsetErrorIntegrated > 100.0) robotWallOffsetErrorIntegrated = 100.0; // Saturation de l'erreur intégrée
+    if (robotWallOffsetErrorIntegrated < -100.0) robotWallOffsetErrorIntegrated = -100.0; // Saturation de l'erreur intégrée
+    robotAngularVelocityCommand = correctorGain * (float)robotWallOffsetError; + correctorIntegralGain * (float)robotWallOffsetErrorIntegrated; // Commande de vitesse angulaire du robot, proportionnelle à l'erreur de position du robot par rapport au mur (0.01 rad/cm)
+    if (robotAngularVelocityCommand > 5.0) robotAngularVelocityCommand = 5.0; // Saturation de la vitesse angulaire
+    if (robotAngularVelocityCommand < -5.0) robotAngularVelocityCommand = -5.0; // Saturation de la vitesse angulaire
     setRobotVelocity(0.1, -1 * robotAngularVelocityCommand); // On assigne une vitesse linéaire de 20 cm/s et une vitesse angulaire proportionnelle à l'erreur de position du robot par rapport au mur (0.01 rad/cm)
   }
 
@@ -221,7 +227,8 @@ void printData(double elapsedTime) {
    /*************** Asservissement ***************/
   if (MOVE) {  
       Serial.println("--- Asservissement ---");    
-      Serial.println ("Erreur :" + String(robotWallOffsetError));          
-      Serial.println("Commande :" + String(robotAngularVelocityCommand));
+      Serial.println ("Erreur : " + String(robotWallOffsetError));   
+      Serial.println("Intégrale de l'erreur : " + String(robotWallOffsetErrorIntegrated));       
+      Serial.println("Commande : " + String(robotAngularVelocityCommand));
   }
 }
