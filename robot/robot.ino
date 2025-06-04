@@ -122,7 +122,7 @@ void setup() {
   }
 
 
-  consigne = 140;
+  consigne = 180;
   /*************** MESURES ***************/ 
   current_time = micros(); 
   initial_time = current_time;
@@ -157,6 +157,7 @@ void loop() {
 
   if (robotActif) {
       if (step == 0) {
+        consigne = 140;
         capteur();
         delay(100);
         robotWallOffsetSetpoint = currentMeasuredLenght[1];
@@ -188,7 +189,7 @@ void loop() {
       }
     }
     else if (step == 2) {
-
+      consigne = 180;
       setRobotVelocity(0, 0);
     }
     else if (step == 3) {
@@ -199,11 +200,12 @@ void loop() {
     setRobotVelocity(0, 0);
   }
 
+
+
   /*************** ASSERVISSEMENT BRAS ***************/
   float erreur = 150*(consigne - currentMotorPosDeg[2]);
   setArmPosition(erreur);
 
-  capteur();
   /*************** GESTION PINCE ***************/
   if (SENSE && GRIP) { 
     if (currentMeasuredLenght[0] >= 8) {
@@ -242,6 +244,8 @@ void loop() {
   // Patienter pour respecter le cadencement de la boucle
   sleep_time = PERIOD_IN_MICROS - (micros() - current_time);
   if ( (sleep_time > 0) && (sleep_time < PERIOD_IN_MICROS) ) delayMicroseconds(sleep_time); // On patiente le temps restant pour respecter la fréquence d'itération (SUPPOSE QUE LES INSTRUCTIONS SONT RÉALISABLES DURANT LA PERIODE)
+
+  capteur();
 } // FIN DE LA BOUCLE PRINCIPALE
 
 // TODO : À bouger dans un fichier à part
@@ -342,7 +346,7 @@ void printData(double elapsedTime) {
 
 bool isTotemviewed() {
 
-  if (abs(currentMeasuredLenght[1] - previousMeasuredLenght[1]) > 2) { // Si la distance mesurée par le capteur frontal augmente de plus de 5 cm, on considère que le totem est vu
+  if (abs(currentMeasuredLenght[1] - previousMeasuredLenght[1]) >= 1.6) { // Si la distance mesurée par le capteur frontal augmente de plus de 5 cm, on considère que le totem est vu
     return true;
   }
   return false;
