@@ -35,9 +35,20 @@
 // Robot
 const float robotWheelRadius = 0.0225; // Radius of the wheels in meters
 const float robotWheelDistance = 0.15; // Distance between the wheels in meters
-int counterForMoving;
-int step;  
+int counterForMoving;  
 int checkSensor;
+enum RobotState {
+  SETPOINT_INIT,
+  GO_TO_BEACON,
+  ALIGN_WITH_BEACON,
+  TURN_TO_TOTEM,
+  ALIGN_WITH_WALL,
+  SWEEP,
+  APPROACH,
+  GRAB,
+  DROP
+};
+RobotState step;
 
 // Gripper 
 Servo gripServo;
@@ -55,7 +66,7 @@ const int printingPeriodicity = 25; // The variables will be sent to the serial 
 unsigned long current_time, old_time, initial_time;
 
 // Temporairement placées ici
-int robotWallOffsetSetpoint = 10; // cm
+int robotWallOffsetSetpoint; // cm
 int robotWallOffsetMeasure = 0;
 const float correctorGain = 0.1;
 int robotWallOffsetError = 0;
@@ -67,13 +78,19 @@ const float correctorIntegralGain = 0.01;
 // Déplacement
 void setRobotVelocity(float linearVelocity, float angularVelocity); // Set the linear and angular velocity of the robot //TODO : Vérifier qu'elle fonctionne
 void balayer();
-bool isTotemviewed();
+
+// Capteurs
+void capteur();
+bool beaconInRange();
+
 // Saisie
 void saisir();
 
 // Affichage
 void printData(double elapsedTime);
 
+
+/****************** SETUP *********************/
 void setup() {
   /*************** MONITEUR SERIE ***************/
   pinMode(boutonPin, INPUT_PULLUP);
@@ -122,124 +139,122 @@ void setup() {
   /*************** MESURES ***************/ 
   current_time = micros(); 
   initial_time = current_time;
-  capteur();
-  delay(100); 
-  capteur();
-  robotWallOffsetSetpoint = currentMeasuredLenght[1];
+
+  robotWallOffsetSetpoint = 0;
 }
 
 void loop() {
+   /*************** CADENCEMENT ***************/
+   unsigned int sleep_time;
+   double elapsed_time_in_s;
+   old_time = current_time;
+   current_time = micros();
+   elapsed_time_in_s = (double)(current_time - initial_time);
+   elapsed_time_in_s *= 0.000001;
 
-
+  /*************** BOUTON ***************/
   if (digitalRead(boutonPin) == LOW) {
-    delay(100); // anti-rebond simple
-    if (!robotActif){
-    robotActif = true;
-    step = 0;
-    }else{
-    robotActif = false;
+    delay(100); // Anti-rebond
+    if (!robotActif) {
+      robotActif = true;
+      counterForMoving = 0; 
+      step = SETPOINT_INIT;
+    } else {
+      robotActif = false;
     }
-    delay(100);
   }
 
-  unsigned int sleep_time;
-  double elapsed_time_in_s;
-  old_time = current_time;
-  current_time = micros();
-  elapsed_time_in_s = (double)(current_time - initial_time);
-  elapsed_time_in_s *= 0.000001;
-
-
-
+  /*************** PARCOURS DE L'ARÈNE ***************/
   if (robotActif) {
-      if (step == 0) {
+    // Acquisition des mesures des capteurs
+    capteur(); 
+
+    // Saisie du totem
+    if (currentMeasuredLenght[0] < 8) {
+      gripServo.write(180); 
+
+      int feedbackValue = analogRead(SERVO_FEEDBACK_PIN);
+      float angle = map(feedbackValue, 94, 440, 0, 180); // conversion en angle 0 < > 180
+      if (angle < 176 && angle > 40) {
+        counterForGrab_checking++; 
+        if (counterForGrab_checking > Grab_checkingPeriodicity) {
+          totem_grabbed = !totem_grabbed;
+          counterForGrab_checking = 0;
+        }
+      } else counterForGrab_checking = 0;
+    } else  gripServo.write(0);
+    
+    switch (step) {
+      case SETPOINT_INIT: // On fixe la consigne
         capteur();
-        delay(100);
         robotWallOffsetSetpoint = currentMeasuredLenght[1];
-        delay(100);
-        step = 1;
-      }
-      if (step == 1) {
-      if (isTotemviewed()) { // Si le totem est vu, on passe à l'étape suivante
-      // faire 90°
-      setRobotVelocity(0.1,0);
-      delay(2000); 
-      setRobotVelocity(0, -MY_PI/8.0); // On tourne de 90° vers la droite
-      delay(3100); // On attend 1 seconde pour que le robot tourne
-      capteur(); // On lit les capteurs pour mettre à jour la mesure du mur
-      delay(100);
-      robotWallOffsetSetpoint = currentMeasuredLenght[1]; // On met à jour la position du mur
-        step = 2;
-      } else {
-      robotWallOffsetError = robotWallOffsetSetpoint - robotWallOffsetMeasure; // Erreur de position du robot par rapport au mur
-      robotWallOffsetErrorIntegrated += (double)robotWallOffsetError * elapsed_time_in_s;
-      if (robotWallOffsetErrorIntegrated > 100.0) robotWallOffsetErrorIntegrated = 100.0; // Saturation de l'erreur intégrée
-      if (robotWallOffsetErrorIntegrated < -100.0) robotWallOffsetErrorIntegrated = -100.0; // Saturation de l'erreur intégrée
-      robotAngularVelocityCommand = correctorGain * (float)robotWallOffsetError; + correctorIntegralGain * (float)robotWallOffsetErrorIntegrated; // Commande de vitesse angulaire du robot, proportionnelle à l'erreur de position du robot par rapport au mur (0.01 rad/cm)
-      if (robotAngularVelocityCommand > 5.0) robotAngularVelocityCommand = 5.0; // Saturation de la vitesse angulaire
-      if (robotAngularVelocityCommand < -5.0) robotAngularVelocityCommand = -5.0; // Saturation de la vitesse angulaire
-      setRobotVelocity(0.1, -1 * robotAngularVelocityCommand); // On assigne une vitesse linéaire de 20 cm/s et une vitesse angulaire proportionnelle à l'erreur de position du robot par rapport au mur (0.01 rad/cm)
-      }
-    }
-    else if (step == 2) {
-      if (isTotemviewed()) { // Si le totem est vu, on passe à l'étape suivante
-      // faire 90°
-      setRobotVelocity(0.1,0);
-      delay(2000); 
-      setRobotVelocity(0, -MY_PI/8.0); // On tourne de 90° vers la droite
-      delay(3100); // On attend 1 seconde pour que le robot tourne
-        step = 3;
-      } else {
-      robotWallOffsetError = robotWallOffsetSetpoint - robotWallOffsetMeasure; // Erreur de position du robot par rapport au mur
-      robotWallOffsetErrorIntegrated += (double)robotWallOffsetError * elapsed_time_in_s;
-      if (robotWallOffsetErrorIntegrated > 100.0) robotWallOffsetErrorIntegrated = 100.0; // Saturation de l'erreur intégrée
-      if (robotWallOffsetErrorIntegrated < -100.0) robotWallOffsetErrorIntegrated = -100.0; // Saturation de l'erreur intégrée
-      robotAngularVelocityCommand = correctorGain * (float)robotWallOffsetError;// + correctorIntegralGain * (float)robotWallOffsetErrorIntegrated; // Commande de vitesse angulaire du robot, proportionnelle à l'erreur de position du robot par rapport au mur (0.01 rad/cm)
-      if (robotAngularVelocityCommand > 5.0) robotAngularVelocityCommand = 5.0; // Saturation de la vitesse angulaire
-      if (robotAngularVelocityCommand < -5.0) robotAngularVelocityCommand = -5.0; // Saturation de la vitesse angulaire
-      setRobotVelocity(0.1, -1 * robotAngularVelocityCommand); // On assigne une vitesse linéaire de 20 cm/s et une vitesse angulaire proportionnelle à l'erreur de position du robot par rapport au mur (0.01 rad/cm)
-      }
-    }
-    else if (step == 3) {
-      setRobotVelocity(0, 0); // On arrête le robot
-    }
-  } else {
-    // Si le robot n'est pas actif, on arrête les moteurs
-    setRobotVelocity(0, 0);
-  }
+        step = 1; // On commence à avancer
+        break; 
+      case GO_TO_BEACON: // On avance jusqu'à la première balise
+        // Asservissement de la distance au mur
+        robotWallOffsetError = robotWallOffsetSetpoint - robotWallOffsetMeasure; // Erreur de position du robot par rapport au mur
+        robotWallOffsetErrorIntegrated += (double)robotWallOffsetError * elapsed_time_in_s;
+        if (robotWallOffsetErrorIntegrated > 100.0) robotWallOffsetErrorIntegrated = 100.0; // Saturation de l'erreur intégrée
+        if (robotWallOffsetErrorIntegrated < -100.0) robotWallOffsetErrorIntegrated = -100.0; // Saturation de l'erreur intégrée
+        robotAngularVelocityCommand = correctorGain * (float)robotWallOffsetError + correctorIntegralGain * (float)robotWallOffsetErrorIntegrated; // Commande de vitesse angulaire du robot, proportionnelle à l'erreur de position du robot par rapport au mur (0.01 rad/cm)
+        if (robotAngularVelocityCommand > 5.0) robotAngularVelocityCommand = 5.0; // Saturation de la vitesse angulaire
+        if (robotAngularVelocityCommand < -5.0) robotAngularVelocityCommand = -5.0; // Saturation de la vitesse angulaire
+        setRobotVelocity(0.1, -1 * robotAngularVelocityCommand); // On assigne une vitesse linéaire de 20 cm/s et une vitesse angulaire proportionnelle à l'erreur de position du robot par rapport au mur (0.01 rad/cm)
+        
+        if (beaconInRange()) step = 2;
+        break;
+      case ALIGN_WITH_BEACON: // On s'aligne à peu près avec la balise
+        counterForMoving++;
+        if (counterForMoving < 100) setRobotVelocity(0.1, 0); 
+        else {
+          setRobotVelocity(0, 0);
+          counterForMoving = 0;
+          step = 3;
+        }
+        break;
+      case TURN_TO_TOTEM: // On tourne vers le totem
+        counterForMoving++;
+        if (counterForMoving < 100) setRobotVelocity(0, -MY_PI/8.0); 
+        else {
+          counterForMoving = 0;
+          step = 4;
+        }
+        break;
+      case ALIGN_WITH_WALL: // On se met parralèle au mur
+        int angularDirection = 1.0;
+        
+        if (counterForMoving < 100) setRobotVelocity(0.1, angularDirection * MY_PI / 8.0);
+        else setRobotVelocity(-0.1, angularDirection * MY_PI / 8.0);
+        counterForMoving++;
 
+        if (currentMeasuredLenght[1] - previousMeasuredLenght[1] >= 1) {
+          angularDirection = -1.0; // On tourne dans l'autre sens si on s'éloigne du mur
+        } else if (currentMeasuredLenght[1] - previousMeasuredLenght[1] <= -1) {
+          angularDirection = 1.0; // On tourne dans le même sens si on se rapproche du mur
+        } else {
+          angularDirection = 0; // On ne tourne pas si on est à la même distance du mur
+          robotWallOffsetSetpoint = currentMeasuredLenght[1];
+          setRobotVelocity(0, 0); 
+          step = 5;
+        }
 
+        break;
 
-  /*************** GESTION PINCE ***************/
-  if (SENSE && GRIP) { 
-    if (currentMeasuredLenght[0] >= 8) {
-      gripServo.write(0);
+      case SWEEP: // On balaye du regard
+
+      
+      case APPROACH: // On se positionne à la bonne distance
+
+      case GRAB: // On choppe le totem
+
+      // Puis on refait pareil que les cas précédent 
+
+      // TODO : Variabliser les commandes ?
+
     } 
-    else {
-      gripServo.write(180); //REVERIFIER CES COMMANDES
-    }
+  } else setRobotVelocity(0, 0);
+  
 
-    int feedbackValue = analogRead(SERVO_FEEDBACK_PIN);
-    float angle = map(feedbackValue, 94, 440, 0, 180); // conversion en angle 0 < > 180
-    // Serial.print("Retour pince (angle estimé) : ");
-    // Serial.println(angle);
-    if(angle < 176 && angle > 40) {
-      counterForGrab_checking++; 
-    // SI IL DETECTE UN ANGLE ENTRE 175 et 120 _
-    // pendant 1 seconde alors il a choppé le totem !
-      if (counterForGrab_checking > Grab_checkingPeriodicity) {
-        counterForGrab_checking = 0;
-        totem_grabbed = !totem_grabbed;
-        Serial.println("Totem attrapé !");
-        //INSTRUCTIONS SUITE
-      }
-    }
-    else counterForGrab_checking = 0;
-  }
-
-  if (SENSE){
-    capteur(); // On lit les capteurs
-  }
   /*************** AFFICHAGE ***************/
   if (SPEAK) {
     counterForPrinting++;
@@ -249,10 +264,12 @@ void loop() {
     }
   }
   
-  // Patienter pour respecter le cadencement de la boucle
+  /*************** CADENCEMENT ***************/
   sleep_time = PERIOD_IN_MICROS - (micros() - current_time);
   if ( (sleep_time > 0) && (sleep_time < PERIOD_IN_MICROS) ) delayMicroseconds(sleep_time); // On patiente le temps restant pour respecter la fréquence d'itération (SUPPOSE QUE LES INSTRUCTIONS SONT RÉALISABLES DURANT LA PERIODE)
 } // FIN DE LA BOUCLE PRINCIPALE
+
+
 
 // TODO : À bouger dans un fichier à part
 void setRobotVelocity(float linearVelocity, float angularVelocity) {
@@ -274,16 +291,6 @@ void setRobotVelocity(float linearVelocity, float angularVelocity) {
   readMotorState(MOTOR_ID_RIGHT);
   delayMicroseconds(10);
 
-}
-
-void balayer() {
-  /*
-  Balaye du regard en avançant pour trouver le totem.
-  */
-  setRobotVelocity(0.01, MY_PI/8.0); // Avance à 1 cm/s en tournant de 22.5° par seconde
-  delay(2000); // Balaye pendant 1 seconde
-  setRobotVelocity(0.01, -MY_PI/8.0); // Avance à 1 cm/s en tournant de 22.5° par seconde
-  delay(2000); // Balaye pendant 1 seconde
 }
 
 void printData(double elapsedTime) {
@@ -344,32 +351,25 @@ void printData(double elapsedTime) {
   }
 }
 
-bool isTotemviewed() {
-
-  if (abs(currentMeasuredLenght[1] - previousMeasuredLenght[1]) > 1.5) { // Si la distance mesurée par le capteur frontal augmente de plus de 5 cm, on considère que le totem est vu
-    capteur();
-    if (abs(currentMeasuredLenght[1] - previousMeasuredLenght[1]) < 1.5) {
-      return true;
-    }
-  }
-  return false;
+bool beaconInRange() {
+  return (abs(currentMeasuredLenght[1] - previousMeasuredLenght[1]) > 1.5); 
 }
 
-void capteur(){
+void capteur() {
   int Duree;
-    for (int i = 0; i < NB_OF_SENSORS; i++) {
-      // Emission d'un signal ultrasonnore de 10 µS par TRIG 
-      digitalWrite(triggerPins[i], LOW); // On efface l'etat logique de TRIG 
-      delayMicroseconds(2);
-      digitalWrite(triggerPins[i], HIGH); // On met la broche TRIG a "1" pendant 10µS 
-      delayMicroseconds(10);
-      digitalWrite(triggerPins[i], LOW); // On remet la broche TRIG a "0" 
-      
-      // Reception du signal refléchit sur l'objet
-      Duree = pulseIn(echoPins[i], HIGH, 10000); // On mesure combien de temps le niveau logique haut est resté actif sur ECHO (TRIGGER envoie et ECHO réçois le rebond), timeout de 100000µs
-      previousMeasuredLenght[i] = currentMeasuredLenght[i]; // On sauvegarde la mesure précédente
-      currentMeasuredLenght[i] = Duree * 0.034 / 2; // Calcul de la distance grace au temps mesure (à partir de la vitesse du son)
-      delayMicroseconds(1000);
-    }
-    robotWallOffsetMeasure = currentMeasuredLenght[1]; // On récupère la mesure du capteur latéral pour l'asservissement de distance
+  for (int i = 0; i < NB_OF_SENSORS; i++) {
+    // Emission d'un signal ultrasonnore de 10 µS par TRIG 
+    digitalWrite(triggerPins[i], LOW); // On efface l'etat logique de TRIG 
+    delayMicroseconds(2);
+    digitalWrite(triggerPins[i], HIGH); // On met la broche TRIG a "1" pendant 10µS 
+    delayMicroseconds(10);
+    digitalWrite(triggerPins[i], LOW); // On remet la broche TRIG a "0" 
+    
+    // Reception du signal refléchit sur l'objet
+    Duree = pulseIn(echoPins[i], HIGH, 10000); // On mesure combien de temps le niveau logique haut est resté actif sur ECHO (TRIGGER envoie et ECHO réçois le rebond), timeout de 100000µs
+    previousMeasuredLenght[i] = currentMeasuredLenght[i]; // On sauvegarde la mesure précédente
+    currentMeasuredLenght[i] = Duree * 0.034 / 2; // Calcul de la distance grace au temps mesure (à partir de la vitesse du son)
+    delayMicroseconds(1000);
+  }
+  robotWallOffsetMeasure = currentMeasuredLenght[1]; // On récupère la mesure du capteur latéral pour l'asservissement de distance
 }
