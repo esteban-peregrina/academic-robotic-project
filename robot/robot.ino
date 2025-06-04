@@ -57,7 +57,7 @@ unsigned long current_time, old_time, initial_time;
 // Temporairement placées ici
 int robotWallOffsetSetpoint = 10; // cm
 int robotWallOffsetMeasure = 0;
-const float correctorGain = 0.1;
+const float correctorGain = 0.08;
 int robotWallOffsetError = 0;
 float robotAngularVelocityCommand = 0.0;
 float robotWallOffsetErrorIntegrated = 0.0;
@@ -165,9 +165,9 @@ void loop() {
       setRobotVelocity(0,0);
       delay(500);
       setRobotVelocity(0.05,0);
-      delay(3500); 
+      delay(3600); 
       setRobotVelocity(0, -MY_PI/8.0); // On tourne de 90° vers la droite
-      delay(3100); // On attend 1 seconde pour que le robot tourne
+      delay(3150); // On attend 1 seconde pour que le robot tourne
       capteur(); // On lit les capteurs pour mettre à jour la mesure du mur
       delay(100);
       robotWallOffsetSetpoint = currentMeasuredLenght[1]; // On met à jour la position du mur
@@ -177,14 +177,14 @@ void loop() {
       robotWallOffsetErrorIntegrated += (double)robotWallOffsetError * elapsed_time_in_s;
       if (robotWallOffsetErrorIntegrated > 100.0) robotWallOffsetErrorIntegrated = 100.0; // Saturation de l'erreur intégrée
       if (robotWallOffsetErrorIntegrated < -100.0) robotWallOffsetErrorIntegrated = -100.0; // Saturation de l'erreur intégrée
-      robotAngularVelocityCommand = correctorGain * (float)robotWallOffsetError; + correctorIntegralGain * (float)robotWallOffsetErrorIntegrated; // Commande de vitesse angulaire du robot, proportionnelle à l'erreur de position du robot par rapport au mur (0.01 rad/cm)
+      robotAngularVelocityCommand = correctorGain * (float)robotWallOffsetError;// + correctorIntegralGain * (float)robotWallOffsetErrorIntegrated; // Commande de vitesse angulaire du robot, proportionnelle à l'erreur de position du robot par rapport au mur (0.01 rad/cm)
       if (robotAngularVelocityCommand > 5.0) robotAngularVelocityCommand = 5.0; // Saturation de la vitesse angulaire
       if (robotAngularVelocityCommand < -5.0) robotAngularVelocityCommand = -5.0; // Saturation de la vitesse angulaire
-      setRobotVelocity(0.05, -1 * robotAngularVelocityCommand); // On assigne une vitesse linéaire de 20 cm/s et une vitesse angulaire proportionnelle à l'erreur de position du robot par rapport au mur (0.01 rad/cm)
+      setRobotVelocity(0.025, -1 * robotAngularVelocityCommand); // On assigne une vitesse linéaire de 20 cm/s et une vitesse angulaire proportionnelle à l'erreur de position du robot par rapport au mur (0.01 rad/cm)
       }
     }
     else if (step == 2) {
-      
+
       setRobotVelocity(0, 0);
     }
     else if (step == 3) {
@@ -197,6 +197,8 @@ void loop() {
 
 
 
+
+  capteur();
   /*************** GESTION PINCE ***************/
   if (SENSE && GRIP) { 
     if (currentMeasuredLenght[0] >= 8) {
@@ -222,10 +224,6 @@ void loop() {
       }
     }
     else counterForGrab_checking = 0;
-  }
-
-  if (SENSE){
-    capteur(); // On lit les capteurs
   }
   /*************** AFFICHAGE ***************/
   if (SPEAK) {
@@ -333,7 +331,7 @@ void printData(double elapsedTime) {
 
 bool isTotemviewed() {
 
-  if (abs(currentMeasuredLenght[1] - previousMeasuredLenght[1]) > 1.5) { // Si la distance mesurée par le capteur frontal augmente de plus de 5 cm, on considère que le totem est vu
+  if (abs(currentMeasuredLenght[1] - previousMeasuredLenght[1]) > 2) { // Si la distance mesurée par le capteur frontal augmente de plus de 5 cm, on considère que le totem est vu
     return true;
   }
   return false;
