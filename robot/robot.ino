@@ -37,7 +37,9 @@ const float robotWheelDistance = 0.15; // Distance between the wheels in meters
 
 // Général
 int counterForPrinting;
+int counterForGrab_checking;
 const int printingPeriodicity = 100; // The variables will be sent to the serial link one out of printingPeriodicity loop runs. Every printingPeriodicity * PERIODS_IN_MICROS
+const int Grab_checkingPeriodicity = 200;
 unsigned long current_time, old_time, initial_time;
 
 // Temporairement placées ici
@@ -53,6 +55,7 @@ const float correctorIntegralGain = 0.01;
 // Capteurs
 bool obstacleEnFace();
 bool obstacleADroite(); 
+bool totem_grabbed();
 
 // Déplacement
 void deplacementAngulaire(float deg);
@@ -71,6 +74,7 @@ void setup() {
   // Initialization of the serial link
   Serial.begin(115200);
   counterForPrinting = 0;
+  counterForGrab_checking = 0;
   /*************** BUS CAN ***************/ 
   // Démarrage de la communication avec le bus CAN
   while (CAN.begin(CAN_500KBPS) != CAN_OK) { // Tant que le bus CAN ne reçoit rien 
@@ -102,8 +106,11 @@ void setup() {
     // Création servo de la pince
     myservo.attach(SERVO_TRIGGER_PIN);  
     pinMode(SERVO_FEEDBACK_PIN, INPUT);
+    totem_grabbed=false;
   }
-  
+
+  myservo.write(80);
+
   /*************** MESURES ***************/ 
   current_time = micros(); 
   initial_time = current_time;
@@ -159,14 +166,24 @@ void loop() {
 
     robotWallOffsetMeasure = measuredLenght[1]; // On récupère la mesure du capteur latéral pour l'asservissement de distance
   }
-  
+  /*************** GESTION PINCE TOTEM ***************/
   if (PINCE) { 
     int feedbackValue = analogRead(SERVO_FEEDBACK_PIN);
-    float angle = map(feedbackValue, 94, 383, 0, 180);
-    Serial.print("Retour pince (angle estimé) : ");
-    Serial.println(angle);
+    float angle = map(feedbackValue, 94, 383, 0, 180); // conversion en angle 0<>180
+    // Serial.print("Retour pince (angle estimé) : ");
+    // Serial.println(angle);
+    if(angle<176 && angle>120){
+      counterForGrab_checking++; 
     // SI IL DETECTE UN ANGLE ENTRE 175 et 120 
     // pendant 1 seconde il a choppé le totem !
+      if(counterForGrab_checking>Grab_checkingPeriodicity){
+        counterForGrab_checking=0;
+        totem_grabbed=true;
+        Serial.println("Totem attrapé ! pince à : "+angle+"°");
+        //INSTRUCTIONS SUITE
+      }
+    }
+    else{counterForGrab_checking=0;}
   }
   /*************** AFFICHAGE ***************/
   if (SPEAK) {
@@ -232,22 +249,32 @@ void printData(double elapsedTime) {
       Distance = measuredLenght[i];
       if (Distance <= MesureMaxi && Distance >= MesureMini) {
         // Affichage dans le moniteur serie de la distance mesuree //
-        Serial.println("Distance : " + String(i) + ": " + String(Distance) + "cm");
-        if(i==0){ //si c'est le capteur 0
-          if(Distance >= MesureMaxi/2){
-            myservo.write(60);
-            Serial.println("Commande = 60 servo");
-          }
-          else{
-            myservo.write(150);
-            Serial.println("Commande = 150 servo");
-          }
+        //virer les instructions de la fct "printData"
+        switch (i){
+          case 0:
+            if(i==0){ //si c'est le capteur 0
+              if(Distance >= MesureMaxi/2){
+                myservo.write(60);
+                Serial.println("Commande = 60 servo");
+              }
+              else{
+                myservo.write(150); //REVERIFIER CES COMMANDES
+                Serial.println("Commande = 150 servo"); 
+              }
+            }
+            break;
+          case 1:
+            break;
+          default:
+            break;
         }
+
+        Serial.println("Distance : " + String(i) + ": " + String(Distance) + "cm");
+        
       } else {
         // Si la distance est hors plage, on affiche un message d'erreur
         if(i==0){
           Serial.println("Hors plage");
-          myservo.write(0);
         }
       }
     }
