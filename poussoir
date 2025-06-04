@@ -1,0 +1,29 @@
+const int boutonPin = 8;
+bool robotActif = false;
+
+dans setup :   pinMode(boutonPin, INPUT_PULLUP); 
+
+dans loop :  
+if (digitalRead(boutonPin) == LOW) {
+    delay(100); // anti-rebond simple
+    if (!robotActif){
+    robotActif = true;
+    }else{
+    robotActif = false;
+    }
+    delay(100);
+  }
+
+  if (robotActif) {
+    Serial.println("Robot activé !");
+  // met tout on loop 
+}else {
+    Serial.println("Robot désactivé !");
+    sendVelocityCommand(MOTOR_ID_LEFT, 0);
+    delayMicroseconds(10);
+    sendVelocityCommand(MOTOR_ID_RIGHT, 0);
+    delayMicroseconds(10);
+    sendVelocityCommand(MOTOR_ID_ARM, 0);
+    // Code d'arrêt si besoin
+  }
+    
