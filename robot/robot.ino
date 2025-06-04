@@ -7,7 +7,7 @@
 #define SPEAK 1
 #define MOVE 1
 #define SENSE 1
-#define PINCE 1
+#define GRIP 1
 
 /****************** BIBLIOTHÈQUES *********************/
 // Project
@@ -15,8 +15,9 @@
 #include "sensors.h"
 #include "motors.h"
 
+// Gripper servo
 #include <Servo.h>
-Servo myservo;
+
 // For devices communication using the SPI bus
 #include <SPI.h>
 
@@ -35,11 +36,15 @@ Servo myservo;
 const float robotWheelRadius = 0.0225; // Radius of the wheels in meters
 const float robotWheelDistance = 0.15; // Distance between the wheels in meters
 
+// Gripper 
+Servo gripServo;
+int counterForGrab_checking;
+const int Grab_checkingPeriodicity = 200;
+bool totem_grabbed;
+
 // Général
 int counterForPrinting;
-int counterForGrab_checking;
 const int printingPeriodicity = 100; // The variables will be sent to the serial link one out of printingPeriodicity loop runs. Every printingPeriodicity * PERIODS_IN_MICROS
-const int Grab_checkingPeriodicity = 200;
 unsigned long current_time, old_time, initial_time;
 
 // Temporairement placées ici
@@ -55,12 +60,8 @@ const float correctorIntegralGain = 0.01;
 // Capteurs
 bool obstacleEnFace();
 bool obstacleADroite(); 
-bool totem_grabbed;
 
 // Déplacement
-void deplacementAngulaire(float deg);
-void deplacementLineaire(float dist);
-
 void setRobotVelocity(float linearVelocity, float angularVelocity); // Set the linear and angular velocity of the robot //TODO : Vérifier qu'elle fonctionne
 
 // Saisie
@@ -102,14 +103,13 @@ void setup() {
     pinMode(SENSOR_ECHO_PIN_FRONT, INPUT); 
   }
 
-  if(PINCE){
+  if (GRIP) {
     // Création servo de la pince
-    myservo.attach(SERVO_TRIGGER_PIN);  
+    gripServo.attach(SERVO_TRIGGER_PIN);  
     pinMode(SERVO_FEEDBACK_PIN, INPUT);
-    totem_grabbed=false;
+    totem_grabbed = false;
+    gripServo.write(80);
   }
-
-  myservo.write(80);
 
   /*************** MESURES ***************/ 
   current_time = micros(); 
@@ -135,7 +135,7 @@ void loop() {
   elapsed_time_in_s *= 0.000001;
  
   /*************** MOTEURS ***************/
-  if (MOVE) {    
+  if (SENSE && MOVE) {    
     robotWallOffsetError = robotWallOffsetSetpoint - robotWallOffsetMeasure; // Erreur de position du robot par rapport au mur
     robotWallOffsetErrorIntegrated += (double)robotWallOffsetError * elapsed_time_in_s;
     if (robotWallOffsetErrorIntegrated > 100.0) robotWallOffsetErrorIntegrated = 100.0; // Saturation de l'erreur intégrée
@@ -166,24 +166,31 @@ void loop() {
 
     robotWallOffsetMeasure = measuredLenght[1]; // On récupère la mesure du capteur latéral pour l'asservissement de distance
   }
-  /*************** GESTION PINCE TOTEM ***************/
-  if (PINCE) { 
+  /*************** GESTION PINCE ***************/
+  if (SENSE && GRIP) { 
+    if (measuredLenght[0] >= MesureMaxi/2) {
+      gripServo.write(60);
+    }
+    else {
+      gripServo.write(150); //REVERIFIER CES COMMANDES
+    }
+
     int feedbackValue = analogRead(SERVO_FEEDBACK_PIN);
-    float angle = map(feedbackValue, 94, 383, 0, 180); // conversion en angle 0<>180
+    float angle = map(feedbackValue, 94, 383, 0, 180); // conversion en angle 0 < > 180
     // Serial.print("Retour pince (angle estimé) : ");
     // Serial.println(angle);
-    if(angle<176 && angle>120){
+    if(angle < 176 && angle > 120) {
       counterForGrab_checking++; 
     // SI IL DETECTE UN ANGLE ENTRE 175 et 120 
-    // pendant 1 seconde il a choppé le totem !
-      if(counterForGrab_checking>Grab_checkingPeriodicity){
-        counterForGrab_checking=0;
-        totem_grabbed=true;
+    // pendant 1 seconde alors il a choppé le totem !
+      if (counterForGrab_checking > Grab_checkingPeriodicity) {
+        counterForGrab_checking = 0;
+        totem_grabbed = true;
         Serial.println("Totem attrapé !");
         //INSTRUCTIONS SUITE
       }
     }
-    else{counterForGrab_checking=0;}
+    else counterForGrab_checking = 0;
   }
   /*************** AFFICHAGE ***************/
   if (SPEAK) {
@@ -248,27 +255,6 @@ void printData(double elapsedTime) {
       Serial.println("--- Sensor " + String(i) + " ---");
       Distance = measuredLenght[i];
       if (Distance <= MesureMaxi && Distance >= MesureMini) {
-        // Affichage dans le moniteur serie de la distance mesuree //
-        //virer les instructions de la fct "printData"
-        switch (i){
-          case 0:
-            if(i==0){ //si c'est le capteur 0
-              if(Distance >= MesureMaxi/2){
-                myservo.write(60);
-                Serial.println("Commande = 60 servo");
-              }
-              else{
-                myservo.write(150); //REVERIFIER CES COMMANDES
-                Serial.println("Commande = 150 servo"); 
-              }
-            }
-            break;
-          case 1:
-            break;
-          default:
-            break;
-        }
-
         Serial.println("Distance : " + String(i) + ": " + String(Distance) + "cm");
         
       } else {
@@ -280,7 +266,16 @@ void printData(double elapsedTime) {
     }
   }
 
-   /*************** Asservissement ***************/
+  /*************** PINCE ***************/
+  if (GRIP) {
+    Serial.println("--- Gripper ---");
+    Serial.print("Totem grabbed: ");
+    Serial.println(totem_grabbed ? "Yes" : "No");
+    Serial.print("Servo angle: ");
+    Serial.println(gripServo.read());
+  }
+
+  /*************** Asservissement ***************/
   if (MOVE) {  
       Serial.println("--- Asservissement ---");    
       Serial.println ("Erreur : " + String(robotWallOffsetError));   
