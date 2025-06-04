@@ -193,14 +193,48 @@ void loop() {
     }
     else if (step == 3) {
       consigne = 100; // mettre la bonne valeur pour qu'il rase le sol (seule zone où il pourra voir à coup sur le totem en balayant)
-      int nbfoisapercu = 0;
-      setRobotVelocity(0.01, -MY_PI/8.0);
+      int nbfoisapercuconfirmed = 0;
+      int nbfoisvu=0;
+      int delayv = 50;
+      bool trouvedx= false;
+      int multiplicator = -1 ;
+      setRobotVelocity(0.01, +MY_PI/8.0);
       delay(1200); // 0 -> 40°
       while(1){
-        setRobotVelocity(0.01, +MY_PI/8.0);
-        delay(2400); // 40° -> -40°
-        setRobotVelocity(0.01, -MY_PI/8.0);
-        delay(2400); // -40° -> 40°
+        for(int b=0;b<48;b++){
+          setRobotVelocity(0.01, multiplicator*MY_PI/8.0);
+          delay(delayv); //echantillonnage 50ms
+          int diff=previousMeasuredLenght[0]-currentMeasuredLenght[0];
+          //peut etre calculer la diff de dérivée plutot
+          if(diff>20){ // a modifier selon la vitesse à laquelle on avance
+            nbfoisvu++;
+            Serial.println("Detecté ?");
+            if(nbfoisvu>3){
+              // reculer de 2 ?
+              Serial.println("Trouvé !");
+              trouvedx=true;
+              break;
+            }
+          }
+          else{nbfoisvu=0;}
+          //si mesure > lastmesure+10 -> peut etre trouvé ?
+        }
+        multiplicator=multiplicator*(-1); // change le sens de rotation
+        if(trouvedx!=true){
+          if(currentMeasuredLenght[0]<10){
+            Serial.println("XXXXXXX Pas trouvé en largeur");
+            //manip de marche arrière et demi tour
+          }
+          delayv=delayv+5;continue;
+        } //retour au scan plus élargi
+        while(1){
+          setRobotVelocity(0.03, 0);
+          delay(10);
+          if(currentMeasuredLenght[0]<30){
+            Serial.println("Trouvé et approché!");
+            break;
+          }
+        }
       } 
       //quand la distance est < 20cm
       bool trouvedy= false;
@@ -208,9 +242,10 @@ void loop() {
         consigne= consigne+0.2;
         if(currentMeasuredLenght[0]-previousMeasuredLenght[0]>20){
           trouvedy==true;
-          Serial.println("");
+          Serial.println("Trouvé en hauteur !");
         }
         delayMicroseconds(50);
+        if(consigne>170){Serial.println("XXXXXXX Pas trouvé en hauteur");}
       }
       setRobotVelocity(0, 0); // On arrête le robot
     }
