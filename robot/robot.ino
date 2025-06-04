@@ -55,7 +55,7 @@ const float correctorIntegralGain = 0.01;
 // Capteurs
 bool obstacleEnFace();
 bool obstacleADroite(); 
-bool totem_grabbed();
+bool totem_grabbed;
 
 // Déplacement
 void deplacementAngulaire(float deg);
@@ -179,7 +179,7 @@ void loop() {
       if(counterForGrab_checking>Grab_checkingPeriodicity){
         counterForGrab_checking=0;
         totem_grabbed=true;
-        Serial.println("Totem attrapé ! pince à : "+angle+"°");
+        Serial.println("Totem attrapé !");
         //INSTRUCTIONS SUITE
       }
     }
