@@ -5,7 +5,7 @@
 
 /****************** DEV *********************/
 #define SPEAK 1
-#define MOVE 1
+#define MOVE 0
 #define SENSE 1
 #define GRIP 1
 
@@ -108,7 +108,7 @@ void setup() {
     gripServo.attach(SERVO_TRIGGER_PIN);  
     pinMode(SERVO_FEEDBACK_PIN, INPUT);
     totem_grabbed = false;
-    gripServo.write(80);
+    gripServo.write(0);
   }
 
   /*************** MESURES ***************/ 
@@ -168,24 +168,24 @@ void loop() {
   }
   /*************** GESTION PINCE ***************/
   if (SENSE && GRIP) { 
-    if (measuredLenght[0] >= MesureMaxi/2) {
-      gripServo.write(60);
-    }
+    if (measuredLenght[0] >= 8) {
+      gripServo.write(0);
+    } 
     else {
-      gripServo.write(150); //REVERIFIER CES COMMANDES
+      gripServo.write(180); //REVERIFIER CES COMMANDES
     }
 
     int feedbackValue = analogRead(SERVO_FEEDBACK_PIN);
-    float angle = map(feedbackValue, 94, 383, 0, 180); // conversion en angle 0 < > 180
+    float angle = map(feedbackValue, 94, 440, 0, 180); // conversion en angle 0 < > 180
     // Serial.print("Retour pince (angle estimé) : ");
     // Serial.println(angle);
-    if(angle < 176 && angle > 120) {
+    if(angle < 176 && angle > 40) {
       counterForGrab_checking++; 
     // SI IL DETECTE UN ANGLE ENTRE 175 et 120 
     // pendant 1 seconde alors il a choppé le totem !
       if (counterForGrab_checking > Grab_checkingPeriodicity) {
         counterForGrab_checking = 0;
-        totem_grabbed = true;
+        totem_grabbed = !totem_grabbed;
         Serial.println("Totem attrapé !");
         //INSTRUCTIONS SUITE
       }
@@ -255,7 +255,7 @@ void printData(double elapsedTime) {
       Serial.println("--- Sensor " + String(i) + " ---");
       Distance = measuredLenght[i];
       if (Distance <= MesureMaxi && Distance >= MesureMini) {
-        Serial.println("Distance : " + String(i) + ": " + String(Distance) + "cm");
+        Serial.println("Distance : " + String(Distance) + "cm");
         
       } else {
         // Si la distance est hors plage, on affiche un message d'erreur
@@ -273,6 +273,7 @@ void printData(double elapsedTime) {
     Serial.println(totem_grabbed ? "Yes" : "No");
     Serial.print("Servo angle: ");
     Serial.println(gripServo.read());
+    Serial.println("Servo mesure: "+String(analogRead(SERVO_FEEDBACK_PIN)));
   }
 
   /*************** Asservissement ***************/
