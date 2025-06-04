@@ -45,7 +45,7 @@ bool totem_grabbed;
 
 // Général
 int counterForPrinting;
-const int printingPeriodicity = 100; // The variables will be sent to the serial link one out of printingPeriodicity loop runs. Every printingPeriodicity * PERIODS_IN_MICROS
+const int printingPeriodicity = 5; // The variables will be sent to the serial link one out of printingPeriodicity loop runs. Every printingPeriodicity * PERIODS_IN_MICROS
 unsigned long current_time, old_time, initial_time;
 
 // Temporairement placées ici
@@ -188,7 +188,7 @@ void loop() {
       
       // Reception du signal refléchit sur l'objet
       Duree = pulseIn(echoPins[i], HIGH, 10000); // On mesure combien de temps le niveau logique haut est resté actif sur ECHO (TRIGGER envoie et ECHO réçois le rebond), timeout de 100000µs
-      measuredLenght[i] = Duree * 0.034 / 2; // Calcul de la distance grace au temps mesure (à partir de la vitesse du son)
+      measuredLenght[i] = (float)Duree * 0.034 / 2.0; // Calcul de la distance grace au temps mesure (à partir de la vitesse du son)
       delayMicroseconds(1000);
     }
     robotWallOffsetMeasure = measuredLenght[1]; // On récupère la mesure du capteur latéral pour l'asservissement de distance
@@ -196,7 +196,7 @@ void loop() {
   /*************** GESTION PINCE ***************/
   if (SENSE && GRIP) { 
     if (measuredLenght[0] >= 8) {
-      gripServo.write(0);
+      //gripServo.write(0);
     } 
     else {
       gripServo.write(180); //REVERIFIER CES COMMANDES
@@ -287,17 +287,17 @@ void printData(double elapsedTime) {
 
   /*************** CAPTEURS ***************/
   if (SENSE) {
-    int Distance = 0;
-    for (int i = 0; i < NB_OF_SENSORS; i++) {
-      Serial.println("--- Sensor " + String(i) + " ---");
+    float Distance = 0;
+    for (int i = 0; i < 1; i++) {
+      //Serial.println("--- Sensor " + String(i) + " ---");
       Distance = measuredLenght[i];
-      if (Distance <= MesureMaxi && Distance >= MesureMini) {
-        Serial.println("Distance : " + String(Distance) + "cm");
+      if (Distance <= 200 && Distance >= 1) {
+        Serial.print("" + String(Distance) + " ");
         
       } else {
         // Si la distance est hors plage, on affiche un message d'erreur
         if(i==0){
-          Serial.println("Hors plage");
+          //Serial.println("Hors plage");
         }
       }
     }
@@ -305,12 +305,14 @@ void printData(double elapsedTime) {
 
   /*************** PINCE ***************/
   if (GRIP) {
+    /*
     Serial.println("--- Gripper ---");
     Serial.print("Totem grabbed: ");
     Serial.println(totem_grabbed ? "Yes" : "No");
     Serial.print("Servo angle: ");
     Serial.println(gripServo.read());
     Serial.println("Servo mesure: "+String(analogRead(SERVO_FEEDBACK_PIN)));
+    */
   }
 
   /*************** Asservissement ***************/

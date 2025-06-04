@@ -15,6 +15,6 @@ const int echoPins[NB_OF_SENSORS] = {SENSOR_ECHO_PIN_FRONT, SENSOR_ECHO_PIN_RIGH
 
 extern const int MesureMaxi; // Distance maxi a mesurer 
 extern const int MesureMini; // Distance mini a mesurer 
-extern long measuredLenght[NB_OF_SENSORS];
+extern double measuredLenght[NB_OF_SENSORS];
 
 #endif
