@@ -5,7 +5,7 @@
 
 /****************** DEV *********************/
 #define SPEAK 1
-#define MOVE 0
+#define MOVE 1
 #define SENSE 1
 #define GRIP 1
 
@@ -36,6 +36,7 @@
 const float robotWheelRadius = 0.0225; // Radius of the wheels in meters
 const float robotWheelDistance = 0.15; // Distance between the wheels in meters
 int counterForMoving;
+int step;  
 
 // Gripper 
 Servo gripServo;
@@ -45,7 +46,7 @@ bool totem_grabbed;
 
 // Général
 int counterForPrinting;
-const int printingPeriodicity = 100; // The variables will be sent to the serial link one out of printingPeriodicity loop runs. Every printingPeriodicity * PERIODS_IN_MICROS
+const int printingPeriodicity = 25; // The variables will be sent to the serial link one out of printingPeriodicity loop runs. Every printingPeriodicity * PERIODS_IN_MICROS
 unsigned long current_time, old_time, initial_time;
 
 // Temporairement placées ici
@@ -89,6 +90,7 @@ void setup() {
     motorsInitialization(); // Initialisation des moteurs
     Serial.println("Initialization routine suceeded !");
     counterForMoving = 0; // Reset the counter for moving
+    step = 0;
   }
 
   /*************** CAPTEURS ***************/
@@ -135,7 +137,6 @@ void loop() {
  
   /*************** MOTEURS ***************/
   if (SENSE && MOVE) { 
-    int step = 0;  
     // ------------- Correcteur -------------- // 
     // robotWallOffsetError = robotWallOffsetSetpoint - robotWallOffsetMeasure; // Erreur de position du robot par rapport au mur
     // robotWallOffsetErrorIntegrated += (double)robotWallOffsetError * elapsed_time_in_s;
@@ -146,28 +147,32 @@ void loop() {
     // if (robotAngularVelocityCommand < -5.0) robotAngularVelocityCommand = -5.0; // Saturation de la vitesse angulaire
     // setRobotVelocity(0.1, -1 * robotAngularVelocityCommand); // On assigne une vitesse linéaire de 20 cm/s et une vitesse angulaire proportionnelle à l'erreur de position du robot par rapport au mur (0.01 rad/cm)
     if (step == 0) {
-      if (counterForMoving < 200 * PERIOD_IN_MICROS / 1000) { // On avance pendant 1 seconde (200 * 5 ms)
+      if (counterForMoving < 100) { // On avance pendant 1 seconde (200 * 5 ms)
         setRobotVelocity(0.01, MY_PI/8.0); // Avance à 1 cm/s en tournant de 22.5° par seconde
         counterForMoving++;
       } else {
         counterForMoving = 0; // Reset the counter for moving
+        step = 1;
       }
     } else if (step == 1) {
-      if (measuredLenght[0] > 8 && counterForMoving < 400 * PERIOD_IN_MICROS / 1000) {
+      if (counterForMoving < 200) {
         setRobotVelocity(0.01, -MY_PI/8.0); // Avance à 1 cm/s en tournant de 22.5° par seconde
         counterForMoving++;
       } else {
         counterForMoving = 0;
-        if (measuredLenght[0] <= 8) step = 4;
-        else step = 2;
+        // if (measuredLenght[0] <= 8) step = -1;
+        // else step = 2;
+        step = 2; 
       }
     } else if (step == 2) {
-      if (measuredLenght[0] > 8 && counterForMoving < 400 * PERIOD_IN_MICROS / 1000) {
+      if (counterForMoving < 200) {
         setRobotVelocity(0.01, MY_PI/8.0); // Avance à 1 cm/s en tournant de 22.5° par seconde
         counterForMoving++;
       } else {
         counterForMoving = 0;
-        if (measuredLenght[0] <= 8) step == 4;
+        // if (measuredLenght[0] <= 8) step = -1;
+        // else step = 1;
+        step = 1;
       }
     } else {
       setRobotVelocity(0.0, 0.0);
@@ -283,6 +288,8 @@ void printData(double elapsedTime) {
       Serial.print("offsetMotorPosEncoder[" + String(i) + "]:");
       Serial.println(offsetMotorPosEncoder[i]);
     }
+    Serial.println("Step : " + String(step));
+    Serial.println("counterForMoving : " + String(counterForMoving));
   }
 
   /*************** CAPTEURS ***************/
@@ -296,9 +303,7 @@ void printData(double elapsedTime) {
         
       } else {
         // Si la distance est hors plage, on affiche un message d'erreur
-        if(i==0){
-          Serial.println("Hors plage");
-        }
+        Serial.println("Hors plage");
       }
     }
   }
@@ -314,14 +319,6 @@ void printData(double elapsedTime) {
   }
 
   /*************** Asservissement ***************/
-  if (MOVE) {  
-      Serial.println("--- Asservissement ---");    
-      Serial.println ("Erreur : " + String(robotWallOffsetError));   
-      Serial.println("Intégrale de l'erreur : " + String(robotWallOffsetErrorIntegrated));       
-      Serial.println("Commande : " + String(robotAngularVelocityCommand));
-  }
-
-   /*************** Asservissement ***************/
   if (MOVE) {  
       Serial.println("--- Asservissement ---");    
       Serial.println ("Erreur : " + String(robotWallOffsetError));   
