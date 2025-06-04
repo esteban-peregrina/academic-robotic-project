@@ -142,8 +142,9 @@ void loop() {
     // if (robotAngularVelocityCommand > 5.0) robotAngularVelocityCommand = 5.0; // Saturation de la vitesse angulaire
     // if (robotAngularVelocityCommand < -5.0) robotAngularVelocityCommand = -5.0; // Saturation de la vitesse angulaire
     // setRobotVelocity(0.1, -1 * robotAngularVelocityCommand); // On assigne une vitesse linéaire de 20 cm/s et une vitesse angulaire proportionnelle à l'erreur de position du robot par rapport au mur (0.01 rad/cm)
-  
-    balayer(); // Balaye du regard en avançant pour trouver le totem
+    setRobotVelocity(0.01, MY_PI/8.0); // Avance à 1 cm/s en tournant de 22.5° par seconde
+    delay(1000); // Balaye pendant 1 seconde
+    while (measuredLenght[0] > 8) balayer(); // Balaye du regard en avançant pour trouver le totem
   }
 
   /*************** CAPTEURS ***************/ 
@@ -231,12 +232,10 @@ void balayer() {
   /*
   Balaye du regard en avançant pour trouver le totem.
   */
-  while (measuredLenght[0] > 8) { // Tant que le capteur frontal ne détecte pas le totem
-    setRobotVelocity(0.01, MY_PI/8.0); // Avance à 1 cm/s en tournant de 22.5° par seconde
-    delay(1000); // Balaye pendant 1 seconde
-    setRobotVelocity(0.01, -MY_PI/8.0); // Avance à 1 cm/s en tournant de 22.5° par seconde
-    delay(1000); // Balaye pendant 1 seconde
-  }
+  setRobotVelocity(0.01, MY_PI/8.0); // Avance à 1 cm/s en tournant de 22.5° par seconde
+  delay(2000); // Balaye pendant 1 seconde
+  setRobotVelocity(0.01, -MY_PI/8.0); // Avance à 1 cm/s en tournant de 22.5° par seconde
+  delay(2000); // Balaye pendant 1 seconde
 }
 
 void printData(double elapsedTime) {
