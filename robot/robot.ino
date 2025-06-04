@@ -35,6 +35,7 @@
 // Robot
 const float robotWheelRadius = 0.0225; // Radius of the wheels in meters
 const float robotWheelDistance = 0.15; // Distance between the wheels in meters
+int counterForMoving;
 
 // Gripper 
 Servo gripServo;
@@ -87,6 +88,7 @@ void setup() {
     Serial.println("Starting initialization routine...");
     motorsInitialization(); // Initialisation des moteurs
     Serial.println("Initialization routine suceeded !");
+    counterForMoving = 0; // Reset the counter for moving
   }
 
   /*************** CAPTEURS ***************/
@@ -132,7 +134,8 @@ void loop() {
   elapsed_time_in_s *= 0.000001;
  
   /*************** MOTEURS ***************/
-  if (SENSE && MOVE) {   
+  if (SENSE && MOVE) { 
+    int step = 0;  
     // ------------- Correcteur -------------- // 
     // robotWallOffsetError = robotWallOffsetSetpoint - robotWallOffsetMeasure; // Erreur de position du robot par rapport au mur
     // robotWallOffsetErrorIntegrated += (double)robotWallOffsetError * elapsed_time_in_s;
@@ -142,9 +145,33 @@ void loop() {
     // if (robotAngularVelocityCommand > 5.0) robotAngularVelocityCommand = 5.0; // Saturation de la vitesse angulaire
     // if (robotAngularVelocityCommand < -5.0) robotAngularVelocityCommand = -5.0; // Saturation de la vitesse angulaire
     // setRobotVelocity(0.1, -1 * robotAngularVelocityCommand); // On assigne une vitesse linéaire de 20 cm/s et une vitesse angulaire proportionnelle à l'erreur de position du robot par rapport au mur (0.01 rad/cm)
-    setRobotVelocity(0.01, MY_PI/8.0); // Avance à 1 cm/s en tournant de 22.5° par seconde
-    delay(1000); // Balaye pendant 1 seconde
-    while (measuredLenght[0] > 8) balayer(); // Balaye du regard en avançant pour trouver le totem
+    if (step == 0) {
+      if (counterForMoving < 200 * PERIOD_IN_MICROS / 1000) { // On avance pendant 1 seconde (200 * 5 ms)
+        setRobotVelocity(0.01, MY_PI/8.0); // Avance à 1 cm/s en tournant de 22.5° par seconde
+        counterForMoving++;
+      } else {
+        counterForMoving = 0; // Reset the counter for moving
+      }
+    } else if (step == 1) {
+      if (measuredLenght[0] > 8 && counterForMoving < 400 * PERIOD_IN_MICROS / 1000) {
+        setRobotVelocity(0.01, -MY_PI/8.0); // Avance à 1 cm/s en tournant de 22.5° par seconde
+        counterForMoving++;
+      } else {
+        counterForMoving = 0;
+        if (measuredLenght[0] <= 8) step = 4;
+        else step = 2;
+      }
+    } else if (step == 2) {
+      if (measuredLenght[0] > 8 && counterForMoving < 400 * PERIOD_IN_MICROS / 1000) {
+        setRobotVelocity(0.01, MY_PI/8.0); // Avance à 1 cm/s en tournant de 22.5° par seconde
+        counterForMoving++;
+      } else {
+        counterForMoving = 0;
+        if (measuredLenght[0] <= 8) step == 4;
+      }
+    } else {
+      setRobotVelocity(0.0, 0.0);
+    }
   }
 
   /*************** CAPTEURS ***************/ 
