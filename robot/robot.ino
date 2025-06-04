@@ -122,13 +122,10 @@ void setup() {
   /*************** MESURES ***************/ 
   current_time = micros(); 
   initial_time = current_time;
-
-  // Attendre que l'utilisateur envoie 'S' (À remplacer par un signal du bouton poussoir)
-  Serial.println("Everything is ready, send 'S' to start the main loop.");
-  while (Serial.read() != 'S') {
-    capteur();
-    delay(100);
-  } ;
+  capteur();
+  delay(100); 
+  capteur();
+  robotWallOffsetSetpoint = currentMeasuredLenght[1];
 }
 
 void loop() {
@@ -144,6 +141,7 @@ void loop() {
     }
     delay(100);
   }
+
   unsigned int sleep_time;
   double elapsed_time_in_s;
   old_time = current_time;
@@ -154,12 +152,24 @@ void loop() {
 
 
   if (robotActif) {
-
       if (step == 0) {
+        capteur();
+        delay(100);
+        robotWallOffsetSetpoint = currentMeasuredLenght[1];
+        delay(100);
+        step = 1;
+      }
+      if (step == 1) {
       if (isTotemviewed()) { // Si le totem est vu, on passe à l'étape suivante
       // faire 90°
-    
-        step = 1;
+      setRobotVelocity(0.1,0);
+      delay(2000); 
+      setRobotVelocity(0, -MY_PI/8.0); // On tourne de 90° vers la droite
+      delay(3100); // On attend 1 seconde pour que le robot tourne
+      capteur(); // On lit les capteurs pour mettre à jour la mesure du mur
+      delay(100);
+      robotWallOffsetSetpoint = currentMeasuredLenght[1]; // On met à jour la position du mur
+        step = 2;
       } else {
       robotWallOffsetError = robotWallOffsetSetpoint - robotWallOffsetMeasure; // Erreur de position du robot par rapport au mur
       robotWallOffsetErrorIntegrated += (double)robotWallOffsetError * elapsed_time_in_s;
@@ -171,13 +181,31 @@ void loop() {
       setRobotVelocity(0.1, -1 * robotAngularVelocityCommand); // On assigne une vitesse linéaire de 20 cm/s et une vitesse angulaire proportionnelle à l'erreur de position du robot par rapport au mur (0.01 rad/cm)
       }
     }
-    else if (step == 1) {
-      setRobotVelocity(0,0);
-
-    }
     else if (step == 2) {
-
+      if (isTotemviewed()) { // Si le totem est vu, on passe à l'étape suivante
+      // faire 90°
+      setRobotVelocity(0.1,0);
+      delay(2000); 
+      setRobotVelocity(0, -MY_PI/8.0); // On tourne de 90° vers la droite
+      delay(3100); // On attend 1 seconde pour que le robot tourne
+        step = 3;
+      } else {
+      robotWallOffsetError = robotWallOffsetSetpoint - robotWallOffsetMeasure; // Erreur de position du robot par rapport au mur
+      robotWallOffsetErrorIntegrated += (double)robotWallOffsetError * elapsed_time_in_s;
+      if (robotWallOffsetErrorIntegrated > 100.0) robotWallOffsetErrorIntegrated = 100.0; // Saturation de l'erreur intégrée
+      if (robotWallOffsetErrorIntegrated < -100.0) robotWallOffsetErrorIntegrated = -100.0; // Saturation de l'erreur intégrée
+      robotAngularVelocityCommand = correctorGain * (float)robotWallOffsetError;// + correctorIntegralGain * (float)robotWallOffsetErrorIntegrated; // Commande de vitesse angulaire du robot, proportionnelle à l'erreur de position du robot par rapport au mur (0.01 rad/cm)
+      if (robotAngularVelocityCommand > 5.0) robotAngularVelocityCommand = 5.0; // Saturation de la vitesse angulaire
+      if (robotAngularVelocityCommand < -5.0) robotAngularVelocityCommand = -5.0; // Saturation de la vitesse angulaire
+      setRobotVelocity(0.1, -1 * robotAngularVelocityCommand); // On assigne une vitesse linéaire de 20 cm/s et une vitesse angulaire proportionnelle à l'erreur de position du robot par rapport au mur (0.01 rad/cm)
+      }
     }
+    else if (step == 3) {
+      setRobotVelocity(0, 0); // On arrête le robot
+    }
+  } else {
+    // Si le robot n'est pas actif, on arrête les moteurs
+    setRobotVelocity(0, 0);
   }
 
 
@@ -318,8 +346,11 @@ void printData(double elapsedTime) {
 
 bool isTotemviewed() {
 
-  if (abs(currentMeasuredLenght[1] - previousMeasuredLenght[1]) > 3) { // Si la distance mesurée par le capteur frontal augmente de plus de 5 cm, on considère que le totem est vu
-    return true;
+  if (abs(currentMeasuredLenght[1] - previousMeasuredLenght[1]) > 1.5) { // Si la distance mesurée par le capteur frontal augmente de plus de 5 cm, on considère que le totem est vu
+    capteur();
+    if (abs(currentMeasuredLenght[1] - previousMeasuredLenght[1]) < 1.5) {
+      return true;
+    }
   }
   return false;
 }
