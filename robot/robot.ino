@@ -122,7 +122,7 @@ void setup() {
   }
 
 
-  consigne = 140;
+  consigne = 70;
   /*************** MESURES ***************/ 
   current_time = micros(); 
   initial_time = current_time;
@@ -139,7 +139,7 @@ void loop() {
     delay(100); // anti-rebond simple
     if (!robotActif){
     robotActif = true;
-    step = 0;
+    step = 3;
     }else{
     robotActif = false;
     }
@@ -192,6 +192,26 @@ void loop() {
       setRobotVelocity(0, 0);
     }
     else if (step == 3) {
+      consigne = 100; // mettre la bonne valeur pour qu'il rase le sol (seule zone où il pourra voir à coup sur le totem en balayant)
+      int nbfoisapercu = 0;
+      setRobotVelocity(0.01, -MY_PI/8.0);
+      delay(1200); // 0 -> 40°
+      while(1){
+        setRobotVelocity(0.01, +MY_PI/8.0);
+        delay(2400); // 40° -> -40°
+        setRobotVelocity(0.01, -MY_PI/8.0);
+        delay(2400); // -40° -> 40°
+      } 
+      //quand la distance est < 20cm
+      bool trouvedy= false;
+      while(trouvedy==false){
+        consigne= consigne+0.2;
+        if(currentMeasuredLenght[0]-previousMeasuredLenght[0]>20){
+          trouvedy==true;
+          Serial.println("");
+        }
+        delayMicroseconds(50);
+      }
       setRobotVelocity(0, 0); // On arrête le robot
     }
   } else {
@@ -267,6 +287,9 @@ void setRobotVelocity(float linearVelocity, float angularVelocity) {
 }
 
 void setArmPosition(float erreur){
+  // 3 - 105.2 111 118.15 129.30 133.7 - 7 HAUTEUR PINCE
+  // 9 - 107.42 116.38 122.5 134.5 - 12 CAPTEUR
+  // consigne = map(feedbackValue, 107.42,134.5, 105.2, 133.7);
   sendVelocityCommand(MOTOR_ID_ARM, erreur); 
   readMotorState(MOTOR_ID_ARM);
   delayMicroseconds(10);
