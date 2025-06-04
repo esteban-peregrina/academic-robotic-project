@@ -37,6 +37,7 @@ const float robotWheelRadius = 0.0225; // Radius of the wheels in meters
 const float robotWheelDistance = 0.15; // Distance between the wheels in meters
 int counterForMoving;
 int step;  
+int consigne; // Consigne du bras (degrès)
 int checkSensor;
 
 // Gripper 
@@ -66,6 +67,7 @@ const float correctorIntegralGain = 0.01;
 /****************** DECLARATION DES FONCTIONS *********************/
 // Déplacement
 void setRobotVelocity(float linearVelocity, float angularVelocity); // Set the linear and angular velocity of the robot //TODO : Vérifier qu'elle fonctionne
+void setArmPosition(float erreur);
 void balayer();
 bool isTotemviewed();
 // Saisie
@@ -119,6 +121,8 @@ void setup() {
     gripServo.write(0);
   }
 
+
+  consigne = 140;
   /*************** MESURES ***************/ 
   current_time = micros(); 
   initial_time = current_time;
@@ -195,8 +199,9 @@ void loop() {
     setRobotVelocity(0, 0);
   }
 
-
-
+  /*************** ASSERVISSEMENT BRAS ***************/
+  float erreur = 150*(consigne - currentMotorPosDeg[2]);
+  setArmPosition(erreur);
 
   capteur();
   /*************** GESTION PINCE ***************/
@@ -259,6 +264,12 @@ void setRobotVelocity(float linearVelocity, float angularVelocity) {
   readMotorState(MOTOR_ID_RIGHT);
   delayMicroseconds(10);
 
+}
+
+void setArmPosition(float erreur){
+  sendVelocityCommand(MOTOR_ID_ARM, erreur); 
+  readMotorState(MOTOR_ID_ARM);
+  delayMicroseconds(10);
 }
 
 void balayer() {
