@@ -228,6 +228,9 @@ void loop() {
           }
           delayv=delayv+5;continue;
         } //retour au scan plus élargi
+        
+        // CHECKPOINT - Totem Vu
+
         while(1){
           setRobotVelocity(0.03, 0);
           delay(10);
