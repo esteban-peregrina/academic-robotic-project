@@ -195,13 +195,13 @@ void loop() {
       consigne = 100; // mettre la bonne valeur pour qu'il rase le sol (seule zone où il pourra voir à coup sur le totem en balayant)
       int nbfoisapercuconfirmed = 0;
       int nbfoisvu=0;
-      int delayv = 50;
+      int delayv = 100;
       bool trouvedx= false;
       int multiplicator = -1 ;
       setRobotVelocity(0.01, +MY_PI/8.0);
       delay(1200); // 0 -> 40°
       while(1){
-        for(int b=0;b<48;b++){
+        for(int b=0;b<24;b++){
           setRobotVelocity(0.01, multiplicator*MY_PI/8.0);
           delay(delayv); //echantillonnage 50ms
           int diff=previousMeasuredLenght[0]-currentMeasuredLenght[0];
@@ -216,12 +216,13 @@ void loop() {
               break;
             }
           }
-          else{nbfoisvu=0;}
+          else{
+            if(nbfoisvu!=0){nbfoisvu=0;Serial.println("Fausse alerte");}}
           //si mesure > lastmesure+10 -> peut etre trouvé ?
         }
         multiplicator=multiplicator*(-1); // change le sens de rotation
         if(trouvedx!=true){
-          if(currentMeasuredLenght[0]<10){
+          if(currentMeasuredLenght[0]>240){
             Serial.println("XXXXXXX Pas trouvé en largeur");
             //manip de marche arrière et demi tour
           }
@@ -417,7 +418,7 @@ void capteur(){
       digitalWrite(triggerPins[i], LOW); // On remet la broche TRIG a "0" 
       
       // Reception du signal refléchit sur l'objet
-      Duree = pulseIn(echoPins[i], HIGH, 10000); // On mesure combien de temps le niveau logique haut est resté actif sur ECHO (TRIGGER envoie et ECHO réçois le rebond), timeout de 100000µs
+      Duree = pulseIn(echoPins[i], HIGH, 20000); // On mesure combien de temps le niveau logique haut est resté actif sur ECHO (TRIGGER envoie et ECHO réçois le rebond), timeout de 100000µs
       previousMeasuredLenght[i] = currentMeasuredLenght[i]; // On sauvegarde la mesure précédente
       currentMeasuredLenght[i] = Duree * 0.034 / 2; // Calcul de la distance grace au temps mesure (à partir de la vitesse du son)
       delayMicroseconds(1000);
