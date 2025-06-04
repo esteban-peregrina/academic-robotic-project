@@ -5,7 +5,7 @@
 
 /****************** DEV *********************/
 #define SPEAK 1
-#define MOVE 0
+#define MOVE 1
 #define SENSE 1
 #define GRIP 1
 
