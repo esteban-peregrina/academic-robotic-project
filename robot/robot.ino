@@ -37,6 +37,7 @@ const float robotWheelRadius = 0.0225; // Radius of the wheels in meters
 const float robotWheelDistance = 0.15; // Distance between the wheels in meters
 int counterForMoving;
 int step;  
+int checkSensor;
 
 // Gripper 
 Servo gripServo;
@@ -91,6 +92,7 @@ void setup() {
     Serial.println("Initialization routine suceeded !");
     counterForMoving = 0; // Reset the counter for moving
     step = 0;
+    checkSensor = 0; // Reset the sensor check variable
   }
 
   /*************** CAPTEURS ***************/
@@ -147,7 +149,7 @@ void loop() {
     // if (robotAngularVelocityCommand < -5.0) robotAngularVelocityCommand = -5.0; // Saturation de la vitesse angulaire
     // setRobotVelocity(0.1, -1 * robotAngularVelocityCommand); // On assigne une vitesse linéaire de 20 cm/s et une vitesse angulaire proportionnelle à l'erreur de position du robot par rapport au mur (0.01 rad/cm)
     if (step == 0) {
-      if (counterForMoving < 100) { // On avance pendant 1 seconde (200 * 5 ms)
+      if (counterForMoving < 100) {
         setRobotVelocity(0.01, MY_PI/8.0); // Avance à 1 cm/s en tournant de 22.5° par seconde
         counterForMoving++;
       } else {
@@ -160,9 +162,13 @@ void loop() {
         counterForMoving++;
       } else {
         counterForMoving = 0;
-        // if (measuredLenght[0] <= 8) step = -1;
-        // else step = 2;
-        step = 2; 
+        if (currentMeasuredLenght[0] <= 12) {
+          checkSensor++;
+          if (checkSensor > 5) step = -1;
+        } else {
+          step = 2;
+          checkSensor = 0; // Reset the sensor check variable
+        }
       }
     } else if (step == 2) {
       if (counterForMoving < 200) {
@@ -170,11 +176,19 @@ void loop() {
         counterForMoving++;
       } else {
         counterForMoving = 0;
-        // if (measuredLenght[0] <= 8) step = -1;
-        // else step = 1;
-        step = 1;
+        if (currentMeasuredLenght[0] <= 12) {
+          checkSensor++;
+          if (checkSensor > 5) step = -1;
+        } else {
+          step = 1;
+          checkSensor = 0; // Reset the sensor check variable
+        }
       }
     } else {
+      if (currentMeasuredLenght[0] > 12) {
+        checkSensor++;
+        if (checkSensor > 3) step = 1;
+      }
       setRobotVelocity(0.0, 0.0);
     }
   }
@@ -193,14 +207,15 @@ void loop() {
       
       // Reception du signal refléchit sur l'objet
       Duree = pulseIn(echoPins[i], HIGH, 10000); // On mesure combien de temps le niveau logique haut est resté actif sur ECHO (TRIGGER envoie et ECHO réçois le rebond), timeout de 100000µs
-      measuredLenght[i] = Duree * 0.034 / 2; // Calcul de la distance grace au temps mesure (à partir de la vitesse du son)
+      previousMeasuredLenght[i] = currentMeasuredLenght[i]; // On sauvegarde la mesure précédente
+      currentMeasuredLenght[i] = Duree * 0.034 / 2; // Calcul de la distance grace au temps mesure (à partir de la vitesse du son)
       delayMicroseconds(1000);
     }
-    robotWallOffsetMeasure = measuredLenght[1]; // On récupère la mesure du capteur latéral pour l'asservissement de distance
+    robotWallOffsetMeasure = currentMeasuredLenght[1]; // On récupère la mesure du capteur latéral pour l'asservissement de distance
   }
   /*************** GESTION PINCE ***************/
   if (SENSE && GRIP) { 
-    if (measuredLenght[0] >= 8) {
+    if (currentMeasuredLenght[0] >= 8) {
       gripServo.write(0);
     } 
     else {
@@ -253,10 +268,10 @@ void setRobotVelocity(float linearVelocity, float angularVelocity) {
   // Envoie les commandes de vitesse aux moteurs
   sendVelocityCommand(MOTOR_ID_LEFT, leftMotorVel); 
   readMotorState(MOTOR_ID_LEFT);
-  delayMicroseconds(1000);
+  delayMicroseconds(10);
   sendVelocityCommand(MOTOR_ID_RIGHT, rightMotorVel); 
   readMotorState(MOTOR_ID_RIGHT);
-  delayMicroseconds(1000);
+  delayMicroseconds(10);
 
 }
 
@@ -297,7 +312,7 @@ void printData(double elapsedTime) {
     int Distance = 0;
     for (int i = 0; i < NB_OF_SENSORS; i++) {
       Serial.println("--- Sensor " + String(i) + " ---");
-      Distance = measuredLenght[i];
+      Distance = currentMeasuredLenght[i];
       if (Distance <= MesureMaxi && Distance >= MesureMini) {
         Serial.println("Distance : " + String(Distance) + "cm");
         
