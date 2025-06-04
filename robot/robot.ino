@@ -57,12 +57,9 @@ float robotWallOffsetErrorIntegrated = 0.0;
 const float correctorIntegralGain = 0.01; 
 
 /****************** DECLARATION DES FONCTIONS *********************/
-// Capteurs
-bool obstacleEnFace();
-bool obstacleADroite(); 
-
 // Déplacement
 void setRobotVelocity(float linearVelocity, float angularVelocity); // Set the linear and angular velocity of the robot //TODO : Vérifier qu'elle fonctionne
+void balayer();
 
 // Saisie
 void saisir();
@@ -163,7 +160,6 @@ void loop() {
       measuredLenght[i] = Duree * 0.034 / 2; // Calcul de la distance grace au temps mesure (à partir de la vitesse du son)
       delayMicroseconds(1000);
     }
-
     robotWallOffsetMeasure = measuredLenght[1]; // On récupère la mesure du capteur latéral pour l'asservissement de distance
   }
   /*************** GESTION PINCE ***************/
@@ -226,6 +222,19 @@ void setRobotVelocity(float linearVelocity, float angularVelocity) {
   readMotorState(MOTOR_ID_RIGHT);
   delayMicroseconds(1000);
 
+}
+
+void balayer() {
+  /*
+  Balaye du regard en avançant pour trouver le totem.
+  */
+
+  while (measuredLenght[0] > 8) { // Tant que le capteur frontal ne détecte pas le totem
+    setRobotVelocity(0.01, MY_PI/8.0); // Avance à 1 cm/s en tournant de 22.5° par seconde
+    delay(1000); // Balaye pendant 1 seconde
+    setRobotVelocity(0.01, -MY_PI/8.0); // Avance à 1 cm/s en tournant de 22.5° par seconde
+    delay(1000); // Balaye pendant 1 seconde
+  }
 }
 
 void printData(double elapsedTime) {
