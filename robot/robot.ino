@@ -132,15 +132,18 @@ void loop() {
   elapsed_time_in_s *= 0.000001;
  
   /*************** MOTEURS ***************/
-  if (SENSE && MOVE) {    
-    robotWallOffsetError = robotWallOffsetSetpoint - robotWallOffsetMeasure; // Erreur de position du robot par rapport au mur
-    robotWallOffsetErrorIntegrated += (double)robotWallOffsetError * elapsed_time_in_s;
-    if (robotWallOffsetErrorIntegrated > 100.0) robotWallOffsetErrorIntegrated = 100.0; // Saturation de l'erreur intégrée
-    if (robotWallOffsetErrorIntegrated < -100.0) robotWallOffsetErrorIntegrated = -100.0; // Saturation de l'erreur intégrée
-    robotAngularVelocityCommand = correctorGain * (float)robotWallOffsetError; + correctorIntegralGain * (float)robotWallOffsetErrorIntegrated; // Commande de vitesse angulaire du robot, proportionnelle à l'erreur de position du robot par rapport au mur (0.01 rad/cm)
-    if (robotAngularVelocityCommand > 5.0) robotAngularVelocityCommand = 5.0; // Saturation de la vitesse angulaire
-    if (robotAngularVelocityCommand < -5.0) robotAngularVelocityCommand = -5.0; // Saturation de la vitesse angulaire
-    setRobotVelocity(0.1, -1 * robotAngularVelocityCommand); // On assigne une vitesse linéaire de 20 cm/s et une vitesse angulaire proportionnelle à l'erreur de position du robot par rapport au mur (0.01 rad/cm)
+  if (SENSE && MOVE) {   
+    // ------------- Correcteur -------------- // 
+    // robotWallOffsetError = robotWallOffsetSetpoint - robotWallOffsetMeasure; // Erreur de position du robot par rapport au mur
+    // robotWallOffsetErrorIntegrated += (double)robotWallOffsetError * elapsed_time_in_s;
+    // if (robotWallOffsetErrorIntegrated > 100.0) robotWallOffsetErrorIntegrated = 100.0; // Saturation de l'erreur intégrée
+    // if (robotWallOffsetErrorIntegrated < -100.0) robotWallOffsetErrorIntegrated = -100.0; // Saturation de l'erreur intégrée
+    // robotAngularVelocityCommand = correctorGain * (float)robotWallOffsetError; + correctorIntegralGain * (float)robotWallOffsetErrorIntegrated; // Commande de vitesse angulaire du robot, proportionnelle à l'erreur de position du robot par rapport au mur (0.01 rad/cm)
+    // if (robotAngularVelocityCommand > 5.0) robotAngularVelocityCommand = 5.0; // Saturation de la vitesse angulaire
+    // if (robotAngularVelocityCommand < -5.0) robotAngularVelocityCommand = -5.0; // Saturation de la vitesse angulaire
+    // setRobotVelocity(0.1, -1 * robotAngularVelocityCommand); // On assigne une vitesse linéaire de 20 cm/s et une vitesse angulaire proportionnelle à l'erreur de position du robot par rapport au mur (0.01 rad/cm)
+  
+    balayer(); // Balaye du regard en avançant pour trouver le totem
   }
 
   /*************** CAPTEURS ***************/ 
@@ -228,7 +231,6 @@ void balayer() {
   /*
   Balaye du regard en avançant pour trouver le totem.
   */
-
   while (measuredLenght[0] > 8) { // Tant que le capteur frontal ne détecte pas le totem
     setRobotVelocity(0.01, MY_PI/8.0); // Avance à 1 cm/s en tournant de 22.5° par seconde
     delay(1000); // Balaye pendant 1 seconde
