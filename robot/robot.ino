@@ -220,26 +220,46 @@ void loop() {
           step = 4;
         }
         break;
-      case ALIGN_WITH_WALL: // On se met parralèle au mur
-        int angularDirection = 1.0;
         
-        if (counterForMoving < 100) setRobotVelocity(0.1, angularDirection * MY_PI / 8.0);
-        else setRobotVelocity(-0.1, angularDirection * MY_PI / 8.0);
-        counterForMoving++;
-
-        if (currentMeasuredLenght[1] - previousMeasuredLenght[1] >= 1) {
-          angularDirection = -1.0; // On tourne dans l'autre sens si on s'éloigne du mur
-        } else if (currentMeasuredLenght[1] - previousMeasuredLenght[1] <= -1) {
-          angularDirection = 1.0; // On tourne dans le même sens si on se rapproche du mur
+      case ALIGN_WITH_WALL:
+        static int oscillationCounter = 0;
+        static int currentDirection = 1; // 1 ou -1
+        static float lastDistance = 0;
+        static int stabilityCounter = 0;
+    
+        float speed = 0.05;
+        float angularSpeed = currentDirection * MY_PI / 6.0;  // Rotation sur place
+    
+        // Avancer un peu dans une direction
+        setRobotVelocity(speed, angularSpeed);
+    
+        // Mesure la variation du capteur latéral (ex: capteur à droite)
+        float delta = currentMeasuredLenght[1] - lastDistance;
+        lastDistance = currentMeasuredLenght[1];
+    
+        // Si très peu de variation -> on commence à être parallèle
+        if (fabs(delta) < 0.01) {
+            stabilityCounter++;
         } else {
-          angularDirection = 0; // On ne tourne pas si on est à la même distance du mur
-          robotWallOffsetSetpoint = currentMeasuredLenght[1];
-          setRobotVelocity(0, 0); 
-          step = 5;
+            stabilityCounter = 0;
         }
-
+    
+        // Si plusieurs itérations sont stables, on considère qu’on est parallèle
+        if (stabilityCounter >= 10) {
+            setRobotVelocity(0, 0);
+            robotWallOffsetSetpoint = currentMeasuredLenght[1];
+            stabilityCounter = 0;
+            oscillationCounter = 0;
+            step = 5;
+        }
+    
+        // On change de direction toutes les 50 itérations
+        if (++oscillationCounter > 50) {
+            currentDirection *= -1;
+            oscillationCounter = 0;
+        }
         break;
-
+      
       case SWEEP: // On balaye du regard
 
       
