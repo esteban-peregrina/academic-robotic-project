@@ -50,6 +50,7 @@ enum RobotState {
 };
 RobotState step;
 int counterForBeacons = 0;
+double savedMeasuredLenght; 
 
 // Gripper 
 Servo gripServo;
@@ -161,6 +162,7 @@ void loop() {
       counterForBeacons = 0;
       step = SETPOINT_INIT;
       counterForMoving = 0;
+      savedMeasuredLenght = 0.0;
       Serial.println("-->SETPOINT_INIT");
     } else {
       robotActif = false;
@@ -193,6 +195,7 @@ void loop() {
         counterForMoving++;
         if (counterForMoving > 100) {
           robotWallOffsetSetpoint = currentMeasuredLenght[1];
+          savedMeasuredLenght = robotWallOffsetSetpoint;
           step = GO_TO_BEACON; // On commence à avancer
           Serial.println("-->GO_TO_BEACON");  
         }
@@ -207,9 +210,10 @@ void loop() {
         robotAngularVelocityCommand = correctorGain * (float)robotWallOffsetError;// + correctorIntegralGain * (float)robotWallOffsetErrorIntegrated; // Commande de vitesse angulaire du robot, proportionnelle à l'erreur de position du robot par rapport au mur (0.01 rad/cm)
         if (robotAngularVelocityCommand > 5.0) robotAngularVelocityCommand = 5.0; // Saturation de la vitesse angulaire
         if (robotAngularVelocityCommand < -5.0) robotAngularVelocityCommand = -5.0; // Saturation de la vitesse angulaire
-        setRobotVelocity(0.1, -1 * robotAngularVelocityCommand); // On assigne une vitesse linéaire de 20 cm/s et une vitesse angulaire proportionnelle à l'erreur de position du robot par rapport au mur (0.01 rad/cm)
+        setRobotVelocity(0.05, -1 * robotAngularVelocityCommand); // On assigne une vitesse linéaire de 20 cm/s et une vitesse angulaire proportionnelle à l'erreur de position du robot par rapport au mur (0.01 rad/cm)
         
-        if (beaconInRange()) {
+        if (robotWallOffsetSetpoint - currentMeasuredLenght[1] < 1.6) { // Si la distance au setpoint est trop importante
+          Serial.println("Beacon ?");
           stabilityCounterForBeacon++;
         } else {
           stabilityCounterForBeacon = 0;
@@ -218,6 +222,7 @@ void loop() {
         if (stabilityCounterForBeacon >= 5) {
           counterForBeacons++;
           setRobotVelocity(0, 0);
+          counterForMoving = 0;
           step = (counterForBeacons > 3) ? DROP : ALIGN_WITH_BEACON; // Si on a vu 3 balises, on pose le totem, sinon on continue la procédure
           (step == DROP) ? Serial.println("-->DROP") : Serial.println("-->ALIGN_WITH_BEACON"); 
         }
@@ -225,7 +230,7 @@ void loop() {
         break;
       case ALIGN_WITH_BEACON: // On s'aligne à peu près avec la balise
         counterForMoving++;
-        if (counterForMoving < 300) setRobotVelocity(0.1, 0); 
+        if (counterForMoving < 400) setRobotVelocity(0.1, 0); 
         else {
           setRobotVelocity(0, 0);
           counterForMoving = 0;
