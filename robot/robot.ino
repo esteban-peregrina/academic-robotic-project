@@ -43,9 +43,14 @@ enum RobotState {
   ALIGN_WITH_BEACON,
   TURN_TO_TOTEM,
   ALIGN_WITH_WALL,
+  APPROACH_AFTER90,
   SWEEP,
   APPROACH,
   GRAB,
+  TURN_AFTER_GRAB,
+  GO_STRAIGHT,
+  TURN_AFTER_STRAIGHT,
+  FINAL_STRAIGHT,
   DROP
 };
 RobotState step;
@@ -293,8 +298,11 @@ void loop() {
             robotWallOffsetSetpoint = currentMeasuredLenght[1];
             stabilityCounter = 0;
             oscillationCounter = 0;
-            step = (totem_grabbed) ? GO_TO_BEACON : SWEEP; // Si on a déjà le totem, on le prend, sinon on balaye
-            (step == GO_TO_BEACON) ? Serial.println("-->GO_TO_BEACON") : Serial.println("-->SWEEP");  
+            step = (totem_grabbed) ? GO_TO_BEACON : APPROACH_AFTER90; // Si on a déjà le totem, on le prend, sinon on balaye
+            if (step == APPROACH_AFTER90) {
+              counterForMoving = 0; // Reset the counter for moving
+            }
+            (step == GO_TO_BEACON) ? Serial.println("-->GO_TO_BEACON") : Serial.println("-->APPROACH_AFTER90");  
         }
     
         // On change de direction toutes les 50 itérations
@@ -304,6 +312,19 @@ void loop() {
         }
         break;
       
+      case APPROACH_AFTER90:
+        // On avance un peu pour se rapprocher du totem
+        counterForMoving++;
+        if (counterForMoving < 200) {
+          setRobotVelocity(0.05, 0); // Avance à 5 cm/s
+        } else {
+          setRobotVelocity(0, 0);
+          counterForMoving = 0;
+          step = SWEEP; // On balaye pour trouver le totem
+          Serial.println("-->SWEEP");
+        }
+        break;
+
       case SWEEP: // On balaye du regard
 
       // consigne = 100; // mettre la bonne valeur pour qu'il rase le sol (seule zone où il pourra voir à coup sur le totem en balayant)
