@@ -261,7 +261,7 @@ void loop() {
     
         // Avancer un peu dans une direction
         angularIncrementCounter++;
-        if (angularIncrementCounter < 200 && angularIncrementCounter > 100) { // Incrément angulaire
+        if (angularIncrementCounter > 100 && angularIncrementCounter < 125) { // Incrément angulaire (25 tours de boucle)
           setRobotVelocity(speed, angularSpeed);
         } else if (angularIncrementCounter > 200) { 
           angularIncrementCounter = 0;
@@ -298,7 +298,7 @@ void loop() {
         }
     
         // On change de direction toutes les 50 itérations
-        if (++oscillationCounter > 50) {
+        if (++oscillationCounter > 100) {
             currentDirection *= -1;
             oscillationCounter = 0;
         }
