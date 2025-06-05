@@ -85,6 +85,7 @@ const float correctorIntegralGain = 0.01;
 /****************** DECLARATION DES FONCTIONS *********************/
 // Déplacement
 void setRobotVelocity(float linearVelocity, float angularVelocity); // Set the linear and angular velocity of the robot //TODO : Vérifier qu'elle fonctionne
+void setArmPosition(float erreur);
 
 // Capteurs
 void capteur();
@@ -328,67 +329,125 @@ void loop() {
         break;
 
       case SWEEP: // On balaye du regard
-
-      // consigne = 100; // mettre la bonne valeur pour qu'il rase le sol (seule zone où il pourra voir à coup sur le totem en balayant)
-      // int nbfoisapercuconfirmed = 0;
-      // int nbfoisvu=0;
-      // int delayv = 100;
-      // bool trouvedx= false;
-      // int multiplicator = -1 ;
-      // setRobotVelocity(0.01, +MY_PI/8.0);
-      // delay(1200); // 0 -> 40°
-      // while(1){
-      //   for(int b=0;b<24;b++){
-      //     setRobotVelocity(0.01, multiplicator*MY_PI/8.0);
-      //     delay(delayv); //echantillonnage 50ms
-      //     int diff=previousMeasuredLenght[0]-currentMeasuredLenght[0];
-      //     //peut etre calculer la diff de dérivée plutot
-      //     if(diff>20){ // a modifier selon la vitesse à laquelle on avance
-      //       nbfoisvu++;
-      //       Serial.println("Detecté ?");
-      //       if(nbfoisvu>3){
-      //         // reculer de 2 ?
-      //         Serial.println("Trouvé !");
-      //         trouvedx=true;
-      //         break;
-      //       }
-      //     }
-      //     else{
-      //       if(nbfoisvu!=0){nbfoisvu=0;Serial.println("Fausse alerte");}}
-      //     //si mesure > lastmesure+10 -> peut etre trouvé ?
-      //   }
-      //   multiplicator=multiplicator*(-1); // change le sens de rotation
-      //   if(trouvedx!=true){
-      //     if(currentMeasuredLenght[0]>240){
-      //       Serial.println("XXXXXXX Pas trouvé en largeur");
-      //       //manip de marche arrière et demi tour
-      //     }
-      //     delayv=delayv+5;continue;
-      //   } //retour au scan plus élargi
+        int TOLDX = 10;
+        int TOLSTABLE = 4;
+        int COUNTFORSTABLE = 1;
+        int nbfoisapercuconfirmed = 0;
+        int nbfoisvu=0;
+        int delayv = 50; //valeur d'échantillonnage de délai
+        bool trouvedx= false;
+        int loopamount = 24;
+        int consigne = 113; // mettre la bonne valeur pour qu'il rase le sol (seule zone où il pourra voir à coup sur le totem en balayant)
+        int multiplicator = -1 ;
+        float linspeed = 0.01;
+        float angspeed = MY_PI/16.0;
         
-      //   // CHECKPOINT - Totem Vu
+        setArmPosition(0);
+        setRobotVelocity(linspeed, angspeed);
+        delay((delayv*loopamount)/2); // 0 -> 40°
+        while(trouvedx==false){
+          for(int b=0;b<loopamount;b++){
+            float erreur = 300*(consigne - currentMotorPosDeg[2]);
+            setArmPosition(erreur);
+            setRobotVelocity(linspeed, multiplicator*angspeed);
+            delay(delayv); //echantillonnage 50ms
+            capteur();
+            if(currentMeasuredLenght[0]>180){continue;}
+            // Serial.print(String(currentMeasuredLenght[0])+"\t");
+            if(currentMeasuredLenght[0]<180){
+              Serial.print("d:");
+              Serial.println(currentMeasuredLenght[0]);
+            }
 
-      //   while(1){
-      //     setRobotVelocity(0.03, 0);
-      //     delay(10);
-      //     if(currentMeasuredLenght[0]<30){
-      //       Serial.println("Trouvé et approché!");
-      //       break;
-      //     }
-      //   }
-      // } 
-      // //quand la distance est < 20cm
-      // bool trouvedy= false;
-      // while(trouvedy==false){
-      //   consigne= consigne+0.2;
-      //   if(currentMeasuredLenght[0]-previousMeasuredLenght[0]>20){
-      //     trouvedy==true;
-      //     Serial.println("Trouvé en hauteur !");
-      //   }
-      //   delayMicroseconds(50);
-      //   if(consigne>170){Serial.println("XXXXXXX Pas trouvé en hauteur");}
-      // }
-      // setRobotVelocity(0, 0); // On arrête le robot
+            int diff=previousMeasuredLenght[0]-currentMeasuredLenght[0];
+            //peut etre calculer la diff de dérivée plutot
+            if(abs(diff)>TOLDX){ // a modifier selon la vitesse à laquelle on avance
+              Serial.println("Detecté ?");
+              // CONTINUER SANS REGARDER LES 2 PROCHAINES VALEURS
+              setArmPosition(erreur);
+              setRobotVelocity(linspeed, multiplicator*angspeed);
+              delay(delayv*2); // skip 2 valeurs
+              //
+              for(int c=0;c<=COUNTFORSTABLE;c++){
+                float erreur = 300*(consigne - currentMotorPosDeg[2]);
+                setArmPosition(erreur);
+                setRobotVelocity(linspeed, multiplicator*angspeed);
+                delay(delayv);
+                capteur();
+                Serial.print("d:");
+                Serial.println(currentMeasuredLenght[0]);
+                diff=previousMeasuredLenght[0]-currentMeasuredLenght[0];
+                if(abs(diff)<TOLSTABLE){
+                  Serial.print("Stable");
+                  nbfoisvu++;}
+                else{
+                  Serial.println("Fausse alerte");
+                  nbfoisvu=0;
+                  break;
+                }
+              }
+              // Serial.println("nbfoisvu = "+nbfoisvu);
+              if(nbfoisvu==COUNTFORSTABLE+1){
+                setRobotVelocity(linspeed, (-1)*multiplicator*angspeed);
+                delay(delayv*COUNTFORSTABLE/2.0);
+                setRobotVelocity(0,0);
+                Serial.println("Trouvé !");
+                trouvedx=true;
+                break;
+              }
+            }
+          }
+          multiplicator=multiplicator*(-1); // change le sens de rotation
+
+          if(trouvedx==false){
+            continue;  // on retourne au début
+            }
+          // CHECKPOINT - Totem Vu
+          delay(2000);
+
+          while(1){
+            float erreur = 300*(consigne - currentMotorPosDeg[2]);
+            setArmPosition(erreur);
+            setRobotVelocity(0.05, 0);
+            delay(10);
+            capteur();
+            Serial.print("d:");
+            Serial.println(currentMeasuredLenght[0]);
+            if(abs(currentMeasuredLenght[0]-previousMeasuredLenght[0])>6){
+              Serial.println("totem perdu");
+              trouvedx=false; // on rebalaye
+              //sécurité
+            }
+            if(currentMeasuredLenght[0]<5){
+              Serial.println("Trouvé et approché!");
+              break;
+            }
+          }
+        } 
+        //quand la distance est < 5cm
+        bool trouvedy= false;
+        consigne=180;
+        float erreur = 300*(consigne - currentMotorPosDeg[2]);
+        setArmPosition(erreur);
+        setRobotVelocity(0, 0);
+        delay(30);
+        while(trouvedy==false){
+          consigne= consigne-0.02;
+          capteur();
+          float erreur = 300*(consigne - currentMotorPosDeg[2]);
+          setArmPosition(erreur);
+          Serial.println("DIFF Y:"+String(currentMeasuredLenght[0]-previousMeasuredLenght[0]));
+          if(abs(currentMeasuredLenght[0]-previousMeasuredLenght[0])>4){
+            trouvedy=true;
+            Serial.println("Trouvé en hauteur !");
+          }
+          delay(10);
+        }
+        setRobotVelocity(0, 0); // On arrête le robot
+        setRobotVelocity(10, 0);
+        gripServo.write(0);
+        delayMicroseconds(50);
+        break;
       
       case APPROACH: // On se positionne à la bonne distance
         break;
@@ -519,4 +578,13 @@ void capteur() {
     delayMicroseconds(1000);
   }
   robotWallOffsetMeasure = currentMeasuredLenght[1]; // On récupère la mesure du capteur latéral pour l'asservissement de distance
+}
+
+void setArmPosition(float erreur){
+  // 3 - 105.2 111 118.15 129.30 133.7 - 7 HAUTEUR PINCE
+  // 9 - 107.42 116.38 122.5 134.5 - 12 CAPTEUR
+  // consigne = map(feedbackValue, 107.42,134.5, 105.2, 133.7);
+  sendVelocityCommand(MOTOR_ID_ARM, erreur); 
+  readMotorState(MOTOR_ID_ARM);
+  delayMicroseconds(10);
 }
