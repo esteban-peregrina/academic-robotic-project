@@ -68,6 +68,7 @@ const int boutonPin = 8;
 bool robotActif = false;
 
 // Général
+int tempbeacon = 0;
 int counterForPrinting;
 const int printingPeriodicity = 25; // The variables will be sent to the serial link one out of printingPeriodicity loop runs. Every printingPeriodicity * PERIODS_IN_MICROS
 unsigned long current_time, old_time, initial_time;
@@ -75,7 +76,7 @@ unsigned long current_time, old_time, initial_time;
 // Temporairement placées ici
 int robotWallOffsetSetpoint; // cm
 int robotWallOffsetMeasure = 0;
-const float correctorGain = 0.1;
+const float correctorGain = 0.35;
 int robotWallOffsetError = 0;
 float robotAngularVelocityCommand = 0.0;
 float robotWallOffsetErrorIntegrated = 0.0;
@@ -217,20 +218,21 @@ void loop() {
         if (robotAngularVelocityCommand < -5.0) robotAngularVelocityCommand = -5.0; // Saturation de la vitesse angulaire
         setRobotVelocity(0.05, -1 * robotAngularVelocityCommand); // On assigne une vitesse linéaire de 20 cm/s et une vitesse angulaire proportionnelle à l'erreur de position du robot par rapport au mur (0.01 rad/cm)
         
-        if (robotWallOffsetSetpoint - currentMeasuredLenght[1] < 1.6) { // Si la distance au setpoint est trop importante
+        if ((abs(previousMeasuredLenght[1] - currentMeasuredLenght[1]) > 3)) { // Si la distance au setpoint est trop importante
           Serial.println("Beacon ?");
-          stabilityCounterForBeacon++;
-        } else {
-          stabilityCounterForBeacon = 0;
+          step = ALIGN_WITH_BEACON;
+          //stabilityCounterForBeacon++;
         }
+          //stabilityCounterForBeacon = 0; // On réinitialise le compteur de stabilité
 
-        if (stabilityCounterForBeacon >= 5) {
-          counterForBeacons++;
-          setRobotVelocity(0, 0);
-          counterForMoving = 0;
-          step = (counterForBeacons > 3) ? DROP : ALIGN_WITH_BEACON; // Si on a vu 3 balises, on pose le totem, sinon on continue la procédure
-          (step == DROP) ? Serial.println("-->DROP") : Serial.println("-->ALIGN_WITH_BEACON"); 
-        }
+        
+        // if (stabilityCounterForBeacon >= 2) {
+        //   counterForBeacons++;
+        //   setRobotVelocity(0, 0);
+        //   counterForMoving = 0;
+        //   //step = (counterForBeacons > 3) ? DROP : ALIGN_WITH_BEACON; // Si on a vu 3 balises, on pose le totem, sinon on continue la procédure
+        //   (step == DROP) ? Serial.println("-->DROP") : Serial.println("-->ALIGN_WITH_BEACON"); 
+        // }
 
         break;
       case ALIGN_WITH_BEACON: // On s'aligne à peu près avec la balise
@@ -498,10 +500,6 @@ void printData(double elapsedTime) {
       Serial.println("Intégrale de l'erreur : " + String(robotWallOffsetErrorIntegrated));       
       Serial.println("Commande : " + String(robotAngularVelocityCommand));
   }
-}
-
-bool beaconInRange() {
-  return (abs(currentMeasuredLenght[1] - previousMeasuredLenght[1]) >= 2.0); 
 }
 
 void capteur() {
