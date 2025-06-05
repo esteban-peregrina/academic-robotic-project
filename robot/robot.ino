@@ -72,11 +72,13 @@ int tempbeacon = 0;
 int counterForPrinting;
 const int printingPeriodicity = 25; // The variables will be sent to the serial link one out of printingPeriodicity loop runs. Every printingPeriodicity * PERIODS_IN_MICROS
 unsigned long current_time, old_time, initial_time;
-
+double consigne = 180; // Consigne de position du bras
+float erreur; // Erreur de position du bras
+float angledrop;
 // Temporairement placées ici
 int robotWallOffsetSetpoint; // cm
 int robotWallOffsetMeasure = 0;
-const float correctorGain = 0.35;
+const float correctorGain = 0.25;
 int robotWallOffsetError = 0;
 float robotAngularVelocityCommand = 0.0;
 float robotWallOffsetErrorIntegrated = 0.0;
@@ -238,7 +240,7 @@ void loop() {
         break;
       case ALIGN_WITH_BEACON: // On s'aligne à peu près avec la balise
         counterForMoving++;
-        if (counterForMoving < 400) setRobotVelocity(0.1, 0); 
+        if (counterForMoving < 350) setRobotVelocity(0.1, 0); 
         else {
           setRobotVelocity(0, 0);
           counterForMoving = 0;
@@ -248,12 +250,12 @@ void loop() {
         break;
       case TURN_TO_TOTEM: // On tourne vers le totem
         counterForMoving++;
-        if (counterForMoving < 250) setRobotVelocity(0, -MY_PI/8.0); 
+        if (counterForMoving < 300) setRobotVelocity(0, -MY_PI/8.0); 
         else {
           counterForMoving = 0;
           setRobotVelocity(0, 0);
-          step = ALIGN_WITH_WALL;
-          Serial.println("-->ALIGN_WITH_WALL");
+          step = APPROACH_AFTER90;
+          Serial.println("-->APPROACH_AFTER90");
         }
         break;
         
@@ -448,19 +450,70 @@ void loop() {
         gripServo.write(0);
         delayMicroseconds(50);
         break;
-      
       case APPROACH: // On se positionne à la bonne distance
         break;
+        
       case GRAB: // On choppe le totem
         step = ALIGN_WITH_BEACON;
         break;
+      // mettre robotWallOffsetSetpoint = currentMeasuredLenght[1]; quand step = GO_STRAIGHT
+      case GO_STRAIGHT: // On se positionne à la bonne distance
+        static int stabilityCounterForBeacon = 0;
+        // Asservissement de la distance au mur
+        robotWallOffsetError = robotWallOffsetSetpoint - robotWallOffsetMeasure; // Erreur de position du robot par rapport au mur
+        robotWallOffsetErrorIntegrated += (double)robotWallOffsetError * elapsed_time_in_s;
+        if (robotWallOffsetErrorIntegrated > 100.0) robotWallOffsetErrorIntegrated = 100.0; // Saturation de l'erreur intégrée
+        if (robotWallOffsetErrorIntegrated < -100.0) robotWallOffsetErrorIntegrated = -100.0; // Saturation de l'erreur intégrée
+        robotAngularVelocityCommand = correctorGain * (float)robotWallOffsetError;// + correctorIntegralGain * (float)robotWallOffsetErrorIntegrated; // Commande de vitesse angulaire du robot, proportionnelle à l'erreur de position du robot par rapport au mur (0.01 rad/cm)
+        if (robotAngularVelocityCommand > 5.0) robotAngularVelocityCommand = 5.0; // Saturation de la vitesse angulaire
+        if (robotAngularVelocityCommand < -5.0) robotAngularVelocityCommand = -5.0; // Saturation de la vitesse angulaire
+        setRobotVelocity(0.05, -1 * robotAngularVelocityCommand); // On assigne une vitesse linéaire de 20 cm/s et une vitesse angulaire proportionnelle à l'erreur de position du robot par rapport au mur (0.01 rad/cm)
+        
+        if ((abs(previousMeasuredLenght[1] - currentMeasuredLenght[1]) > 3)) { // Si la distance au setpoint est trop importante
+          Serial.println("Beacon ?");
+          step = TURN_AFTER_STRAIGHT;
+          //stabilityCounterForBeacon++;
+        }
+        break;
+      
+      case TURN_AFTER_STRAIGHT: // On tourne pour se diriger vers la zone de dépose
+        counterForMoving++;
+        if (counterForMoving < 300) setRobotVelocity(0, MY_PI/8.0); 
+        else {
+          counterForMoving = 0;
+          setRobotVelocity(0, 0);
+          step = FINAL_STRAIGHT;
+          robotWallOffsetSetpoint = currentMeasuredLenght[1]; // On fixe la consigne de distance au mur
+          Serial.println("-->FINAL_STRAIGHT");
+        }
+        break;
+      
+      case FINAL_STRAIGHT: // On avance
+        static int stabilityCounterForBeacon = 0;
+        // Asservissement de la distance au mur
+        robotWallOffsetError = robotWallOffsetSetpoint - robotWallOffsetMeasure; // Erreur de position du robot par rapport au mur
+        robotWallOffsetErrorIntegrated += (double)robotWallOffsetError * elapsed_time_in_s;
+        if (robotWallOffsetErrorIntegrated > 100.0) robotWallOffsetErrorIntegrated = 100.0; // Saturation de l'erreur intégrée
+        if (robotWallOffsetErrorIntegrated < -100.0) robotWallOffsetErrorIntegrated = -100.0; // Saturation de l'erreur intégrée
+        robotAngularVelocityCommand = correctorGain * (float)robotWallOffsetError;// + correctorIntegralGain * (float)robotWallOffsetErrorIntegrated; // Commande de vitesse angulaire du robot, proportionnelle à l'erreur de position du robot par rapport au mur (0.01 rad/cm)
+        if (robotAngularVelocityCommand > 5.0) robotAngularVelocityCommand = 5.0; // Saturation de la vitesse angulaire
+        if (robotAngularVelocityCommand < -5.0) robotAngularVelocityCommand = -5.0; // Saturation de la vitesse angulaire
+        setRobotVelocity(0.05, -1 * robotAngularVelocityCommand); // On assigne une vitesse linéaire de 20 cm/s et une vitesse angulaire proportionnelle à l'erreur de position du robot par rapport au mur (0.01 rad/cm)
+        
+        if ((abs(previousMeasuredLenght[1] - currentMeasuredLenght[1]) > 3)) { // Si la distance au setpoint est trop importante
+          Serial.println("Beacon ?");
+          step = DROP;
+          //stabilityCounterForBeacon++;
+        }
+        break;
+
       case DROP: // On pose le totem
         break;
 
-      // Puis on refait pareil que les cas précédent 
-
-      // TODO : Variabliser les commandes ?
-
+      
+      erreur = 300*(consigne - currentMotorPosDeg[2]);
+      setArmPosition(erreur);
+    
     } 
 
     /*************** AFFICHAGE ***************/
