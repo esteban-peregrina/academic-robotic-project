@@ -46,7 +46,9 @@ enum RobotState {
   APPROACH_AFTER,
   SWEEP,
   APPROACH,
+  ARMPOS,
   GRAB,
+  ARMUP,
   TURN_AFTER_GRAB,
   GO_STRAIGHT,
   TURN_AFTER_STRAIGHT,
@@ -74,6 +76,9 @@ int counterForPrinting;
 const int printingPeriodicity = 25; // The variables will be sent to the serial link one out of printingPeriodicity loop runs. Every printingPeriodicity * PERIODS_IN_MICROS
 unsigned long current_time, old_time, initial_time;
 double consigne = 180; // Consigne de position du bras
+double consignePINCE = 133;
+double consigneLOW = 111 ;
+double consigneHIGH = 133 ;
 float erreur; // Erreur de position du bras
 float angledrop;
 // Temporairement placées ici
@@ -93,6 +98,7 @@ void setArmPosition(float erreur);
 // Capteurs
 void capteur();
 bool beaconInRange();
+bool detecttoteminhand();
 
 // Saisie
 void saisir();
@@ -165,6 +171,11 @@ void loop() {
 
   /*************** BOUTON ***************/
   if (digitalRead(boutonPin) == LOW) {
+    static int boutonPressCount = 0;
+    boutonPressCount++;
+    if (boutonPressCount == 2) {
+      consignePINCE = consigneLOW;
+    }
     delay(100); // Anti-rebond
     if (!robotActif) {
       robotActif = true;
@@ -174,7 +185,7 @@ void loop() {
       counterForMoving = 0;
       savedMeasuredLenght = 0.0;
       Serial.println("-->SETPOINT_INIT");
-    } else {
+    } else if(boutonPressCount!=2){
       robotActif = false;
     }
     delay(100); // Anti-rebond
@@ -389,13 +400,41 @@ void loop() {
         if (currentMeasuredLenght[0] < 10) { 
           setRobotVelocity(0, 0);
           counterForMoving = 0;
-          step = GRAB; // On passe à l'étape de prise du totem
-          Serial.println("-->GRAB");
+          step = ARMPOS; // Met le bras à la bonne hauteur pour chopper ce totem
+          Serial.println("-->ARMPOS");
         }
         break; 
-
+      case ARMPOS:
+      //rajouter des setArmPosition(0); au début et a la fin ? pour que currentmotorposdeg se mette a jour
+        for(int i=0;i<20;i++){
+          erreur = 150.0 * (consignePINCE-currentMotorPosDeg[2]);
+          setArmPosition(erreur);
+          delay(50);
+        }
+        step = GRAB;
+        Serial.println("-->GRAB");
+        break;
       case GRAB: // On saisit le totem
-        gripServo.write(0);
+        gripServo.write(0); //ouvre pince
+        setRobotVelocity(0.01,0); //avance pendant 1 seconde !!! A MODIFIER LE TEMPS !!
+        delay(1000); //1 seconde
+        setRobotVelocity(0,0);
+        gripServo.write(180); //ferme pince
+        delay(100);
+
+        /// OPTIONNEL !
+        //detecttoteminhand(); //print si on a le retour du totem ou pas 
+        /// OPTIONNEL !
+
+        step = ARMUP;
+        break;
+      case ARMUP:
+        for(int i=0;i<20;i++){ // boucle d'asservissement pour mettre le bras a 150°
+          erreur = 150.0 * (150-currentMotorPosDeg[2]);
+          setArmPosition(erreur);
+          delay(50);
+        }
+        step = TURN_AFTER_GRAB;
         break;
 
       // case SWEEP: // On balaye du regard
@@ -739,4 +778,18 @@ void setArmPosition(float erreur){
   sendVelocityCommand(MOTOR_ID_ARM, erreur); 
   readMotorState(MOTOR_ID_ARM);
   delayMicroseconds(10);
+}
+
+bool detecttoteminhand(){
+  int feedbackValue = analogRead(SERVO_FEEDBACK_PIN);
+  float angle = map(feedbackValue, 94, 440, 0, 180); // conversion en angle 0 < > 180
+  Serial.print("Retour pince (angle estimé) : ");
+  Serial.println(angle);
+  if(angle < 176 && angle > 40) {
+    // SI IL DETECTE UN ANGLE ENTRE 175 et 120 
+    // pendant 1 seconde alors il a choppé le totem !
+    Serial.println("Totem attrapé !");
+    return true;
+  }
+  return false;
 }
