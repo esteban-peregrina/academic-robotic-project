@@ -76,6 +76,9 @@ double consigne = 180; // Consigne de position du bras
 float erreur; // Erreur de position du bras
 float angledrop;
 // Temporairement placées ici
+int consigne = 113;
+int trouvedx= false;
+int trouvedy = false;
 int robotWallOffsetSetpoint; // cm
 int robotWallOffsetMeasure = 0;
 const float correctorGain = 0.25;
@@ -123,7 +126,7 @@ void setup() {
     motorsInitialization(); // Initialisation des moteurs
     Serial.println("Initialization routine suceeded !");
     counterForMoving = 0; // Reset the counter for moving
-    step = 0;
+    step = SWEEP;
     checkSensor = 0; // Reset the sensor check variable
   }
 
@@ -254,69 +257,10 @@ void loop() {
         else {
           counterForMoving = 0;
           setRobotVelocity(0, 0);
-          step = APPROACH_AFTER90;
-          Serial.println("-->APPROACH_AFTER90");
+          step = SWEEP;
+          Serial.println("-->SWEEP");
         }
         break;
-        
-      case ALIGN_WITH_WALL:
-        static int oscillationCounter = 0;
-        static int currentDirection = 1; // 1 ou -1
-        static float lastDistance = 0;
-        static int stabilityCounter = 0;
-        static int angularIncrementCounter = 0;
-    
-        float speed = currentDirection * 0.05;
-        float angularSpeed = MY_PI / 6.0;  // Rotation sur place
-    
-        // Avancer un peu dans une direction
-        angularIncrementCounter++;
-        if (angularIncrementCounter > 100 && angularIncrementCounter < 125) { // Incrément angulaire (25 tours de boucle)
-          setRobotVelocity(speed, angularSpeed);
-        } else if (angularIncrementCounter > 200) { 
-          angularIncrementCounter = 0;
-        } else {
-          // Aller tout droit
-          setRobotVelocity(speed, 0);
-        }
-    
-        // Mesure la variation du capteur latéral (ex: capteur à droite)
-        float delta = currentMeasuredLenght[1] - lastDistance;
-        lastDistance = currentMeasuredLenght[1];
-    
-        // Si très peu de variation -> on commence à être parallèle
-        if (fabs(delta) < 0.1) {
-            stabilityCounter++;
-            angularSpeed = 0;
-        } else {
-            if (delta > 0) {
-              angularSpeed = MY_PI / 6.0;
-            } else {
-              angularSpeed = -MY_PI / 6.0;
-            }
-            stabilityCounter = 0;
-        }
-    
-        // Si plusieurs itérations sont stables, on considère qu’on est parallèle
-        if (stabilityCounter >= 10) {
-            setRobotVelocity(0, 0);
-            robotWallOffsetSetpoint = currentMeasuredLenght[1];
-            stabilityCounter = 0;
-            oscillationCounter = 0;
-            step = (totem_grabbed) ? GO_TO_BEACON : APPROACH_AFTER90; // Si on a déjà le totem, on le prend, sinon on balaye
-            if (step == APPROACH_AFTER90) {
-              counterForMoving = 0; // Reset the counter for moving
-            }
-            (step == GO_TO_BEACON) ? Serial.println("-->GO_TO_BEACON") : Serial.println("-->APPROACH_AFTER90");  
-        }
-    
-        // On change de direction toutes les 50 itérations
-        if (++oscillationCounter > 100) {
-            currentDirection *= -1;
-            oscillationCounter = 0;
-        }
-        break;
-      
       case APPROACH_AFTER90:
         // On avance un peu pour se rapprocher du totem
         counterForMoving++;
@@ -331,6 +275,7 @@ void loop() {
         break;
 
       case SWEEP: // On balaye du regard
+        Serial.println("SWEEP!");
         int TOLDX = 10;
         int TOLSTABLE = 4;
         int COUNTFORSTABLE = 1;
@@ -339,7 +284,7 @@ void loop() {
         int delayv = 50; //valeur d'échantillonnage de délai
         bool trouvedx= false;
         int loopamount = 24;
-        int consigne = 113; // mettre la bonne valeur pour qu'il rase le sol (seule zone où il pourra voir à coup sur le totem en balayant)
+        consigne = 113; // mettre la bonne valeur pour qu'il rase le sol (seule zone où il pourra voir à coup sur le totem en balayant)
         int multiplicator = -1 ;
         float linspeed = 0.01;
         float angspeed = MY_PI/16.0;
@@ -395,20 +340,18 @@ void loop() {
                 setRobotVelocity(0,0);
                 Serial.println("Trouvé !");
                 trouvedx=true;
+                step = APPROACH;
                 break;
               }
             }
           }
+        }
           multiplicator=multiplicator*(-1); // change le sens de rotation
-
-          if(trouvedx==false){
-            continue;  // on retourne au début
-            }
           // CHECKPOINT - Totem Vu
-          delay(2000);
-
-          while(1){
-            float erreur = 300*(consigne - currentMotorPosDeg[2]);
+          delay(2000); 
+        break;
+      case APPROACH: // On se positionne à la bonne distance
+        float erreur = 300*(consigne - currentMotorPosDeg[2]);
             setArmPosition(erreur);
             setRobotVelocity(0.05, 0);
             delay(10);
@@ -422,21 +365,21 @@ void loop() {
             }
             if(currentMeasuredLenght[0]<5){
               Serial.println("Trouvé et approché!");
+              step = GRAB;
               break;
             }
-          }
-        } 
-        //quand la distance est < 5cm
+        break;
+      case GRAB: // On choppe le totem
         bool trouvedy= false;
         consigne=180;
-        float erreur = 300*(consigne - currentMotorPosDeg[2]);
+        erreur = 300*(consigne - currentMotorPosDeg[2]);
         setArmPosition(erreur);
         setRobotVelocity(0, 0);
         delay(30);
         while(trouvedy==false){
           consigne= consigne-0.02;
           capteur();
-          float erreur = 300*(consigne - currentMotorPosDeg[2]);
+          erreur = 300*(consigne - currentMotorPosDeg[2]);
           setArmPosition(erreur);
           Serial.println("DIFF Y:"+String(currentMeasuredLenght[0]-previousMeasuredLenght[0]));
           if(abs(currentMeasuredLenght[0]-previousMeasuredLenght[0])>4){
