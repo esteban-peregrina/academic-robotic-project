@@ -4,7 +4,7 @@
 /*****************************************************************************/
 
 /****************** DEV *********************/
-#define SPEAK true
+#define SPEAK 0
 #define MOVE 1
 #define SENSE 1
 #define GRIP 0
@@ -49,10 +49,11 @@ enum RobotState {
   DROP
 };
 RobotState step;
+int counterForBeacons = 0;
 
 // Gripper 
 Servo gripServo;
-int counterForGrab_checking;
+int grabStabilityCounter;
 const int Grab_checkingPeriodicity = 200;
 bool totem_grabbed;
 
@@ -77,7 +78,6 @@ const float correctorIntegralGain = 0.01;
 /****************** DECLARATION DES FONCTIONS *********************/
 // Déplacement
 void setRobotVelocity(float linearVelocity, float angularVelocity); // Set the linear and angular velocity of the robot //TODO : Vérifier qu'elle fonctionne
-void balayer();
 
 // Capteurs
 void capteur();
@@ -97,7 +97,7 @@ void setup() {
   // Initialization of the serial link
   Serial.begin(115200);
   counterForPrinting = 0;
-  counterForGrab_checking = 0;
+  grabStabilityCounter = 0;
   /*************** BUS CAN ***************/ 
   // Démarrage de la communication avec le bus CAN
   while (CAN.begin(CAN_500KBPS) != CAN_OK) { // Tant que le bus CAN ne reçoit rien 
@@ -158,10 +158,14 @@ void loop() {
     if (!robotActif) {
       robotActif = true;
       counterForMoving = 0; 
+      counterForBeacons = 0;
       step = SETPOINT_INIT;
+      counterForMoving = 0;
+      Serial.println("-->SETPOINT_INIT");
     } else {
       robotActif = false;
     }
+    delay(100); // Anti-rebond
   }
 
   /*************** PARCOURS DE L'ARÈNE ***************/
@@ -176,48 +180,67 @@ void loop() {
       int feedbackValue = analogRead(SERVO_FEEDBACK_PIN);
       float angle = map(feedbackValue, 94, 440, 0, 180); // conversion en angle 0 < > 180
       if (angle < 176 && angle > 40) {
-        counterForGrab_checking++; 
-        if (counterForGrab_checking > Grab_checkingPeriodicity) {
+        grabStabilityCounter++; 
+        if (grabStabilityCounter > 200) {
           totem_grabbed = !totem_grabbed;
-          counterForGrab_checking = 0;
+          grabStabilityCounter = 0;
         }
-      } else counterForGrab_checking = 0;
-    } else  gripServo.write(0);
+      } else grabStabilityCounter = 0;
+    } else gripServo.write(0);
     
     switch (step) {
       case SETPOINT_INIT: // On fixe la consigne
-        capteur();
-        robotWallOffsetSetpoint = currentMeasuredLenght[1];
-        step = 1; // On commence à avancer
+        counterForMoving++;
+        if (counterForMoving > 100) {
+          robotWallOffsetSetpoint = currentMeasuredLenght[1];
+          step = GO_TO_BEACON; // On commence à avancer
+          Serial.println("-->GO_TO_BEACON");  
+        }
         break; 
       case GO_TO_BEACON: // On avance jusqu'à la première balise
+        static int stabilityCounterForBeacon = 0;
         // Asservissement de la distance au mur
         robotWallOffsetError = robotWallOffsetSetpoint - robotWallOffsetMeasure; // Erreur de position du robot par rapport au mur
         robotWallOffsetErrorIntegrated += (double)robotWallOffsetError * elapsed_time_in_s;
         if (robotWallOffsetErrorIntegrated > 100.0) robotWallOffsetErrorIntegrated = 100.0; // Saturation de l'erreur intégrée
         if (robotWallOffsetErrorIntegrated < -100.0) robotWallOffsetErrorIntegrated = -100.0; // Saturation de l'erreur intégrée
-        robotAngularVelocityCommand = correctorGain * (float)robotWallOffsetError + correctorIntegralGain * (float)robotWallOffsetErrorIntegrated; // Commande de vitesse angulaire du robot, proportionnelle à l'erreur de position du robot par rapport au mur (0.01 rad/cm)
+        robotAngularVelocityCommand = correctorGain * (float)robotWallOffsetError;// + correctorIntegralGain * (float)robotWallOffsetErrorIntegrated; // Commande de vitesse angulaire du robot, proportionnelle à l'erreur de position du robot par rapport au mur (0.01 rad/cm)
         if (robotAngularVelocityCommand > 5.0) robotAngularVelocityCommand = 5.0; // Saturation de la vitesse angulaire
         if (robotAngularVelocityCommand < -5.0) robotAngularVelocityCommand = -5.0; // Saturation de la vitesse angulaire
         setRobotVelocity(0.1, -1 * robotAngularVelocityCommand); // On assigne une vitesse linéaire de 20 cm/s et une vitesse angulaire proportionnelle à l'erreur de position du robot par rapport au mur (0.01 rad/cm)
         
-        if (beaconInRange()) step = 2;
+        if (beaconInRange()) {
+          stabilityCounterForBeacon++;
+        } else {
+          stabilityCounterForBeacon = 0;
+        }
+
+        if (stabilityCounterForBeacon >= 5) {
+          counterForBeacons++;
+          setRobotVelocity(0, 0);
+          step = (counterForBeacons > 3) ? DROP : ALIGN_WITH_BEACON; // Si on a vu 3 balises, on pose le totem, sinon on continue la procédure
+          (step == DROP) ? Serial.println("-->DROP") : Serial.println("-->ALIGN_WITH_BEACON"); 
+        }
+
         break;
       case ALIGN_WITH_BEACON: // On s'aligne à peu près avec la balise
         counterForMoving++;
-        if (counterForMoving < 100) setRobotVelocity(0.1, 0); 
+        if (counterForMoving < 300) setRobotVelocity(0.1, 0); 
         else {
           setRobotVelocity(0, 0);
           counterForMoving = 0;
-          step = 3;
+          step = TURN_TO_TOTEM;
+          Serial.println("-->TURN_TO_TOTEM");
         }
         break;
       case TURN_TO_TOTEM: // On tourne vers le totem
         counterForMoving++;
-        if (counterForMoving < 100) setRobotVelocity(0, -MY_PI/8.0); 
+        if (counterForMoving < 250) setRobotVelocity(0, -MY_PI/8.0); 
         else {
           counterForMoving = 0;
-          step = 4;
+          setRobotVelocity(0, 0);
+          step = ALIGN_WITH_WALL;
+          Serial.println("-->ALIGN_WITH_WALL");
         }
         break;
         
@@ -226,21 +249,36 @@ void loop() {
         static int currentDirection = 1; // 1 ou -1
         static float lastDistance = 0;
         static int stabilityCounter = 0;
+        static int angularIncrementCounter = 0;
     
-        float speed = 0.05;
-        float angularSpeed = currentDirection * MY_PI / 6.0;  // Rotation sur place
+        float speed = currentDirection * 0.05;
+        float angularSpeed = MY_PI / 6.0;  // Rotation sur place
     
         // Avancer un peu dans une direction
-        setRobotVelocity(speed, angularSpeed);
+        angularIncrementCounter++;
+        if (angularIncrementCounter < 200 && angularIncrementCounter > 100) { // Incrément angulaire
+          setRobotVelocity(speed, angularSpeed);
+        } else if (angularIncrementCounter > 200) { 
+          angularIncrementCounter = 0;
+        } else {
+          // Aller tout droit
+          setRobotVelocity(speed, 0);
+        }
     
         // Mesure la variation du capteur latéral (ex: capteur à droite)
         float delta = currentMeasuredLenght[1] - lastDistance;
         lastDistance = currentMeasuredLenght[1];
     
         // Si très peu de variation -> on commence à être parallèle
-        if (fabs(delta) < 0.01) {
+        if (fabs(delta) < 0.1) {
             stabilityCounter++;
+            angularSpeed = 0;
         } else {
+            if (delta > 0) {
+              angularSpeed = MY_PI / 6.0;
+            } else {
+              angularSpeed = -MY_PI / 6.0;
+            }
             stabilityCounter = 0;
         }
     
@@ -250,7 +288,8 @@ void loop() {
             robotWallOffsetSetpoint = currentMeasuredLenght[1];
             stabilityCounter = 0;
             oscillationCounter = 0;
-            step = 5;
+            step = (totem_grabbed) ? GO_TO_BEACON : SWEEP; // Si on a déjà le totem, on le prend, sinon on balaye
+            (step == GO_TO_BEACON) ? Serial.println("-->GO_TO_BEACON") : Serial.println("-->SWEEP");  
         }
     
         // On change de direction toutes les 50 itérations
@@ -262,27 +301,91 @@ void loop() {
       
       case SWEEP: // On balaye du regard
 
+      // consigne = 100; // mettre la bonne valeur pour qu'il rase le sol (seule zone où il pourra voir à coup sur le totem en balayant)
+      // int nbfoisapercuconfirmed = 0;
+      // int nbfoisvu=0;
+      // int delayv = 100;
+      // bool trouvedx= false;
+      // int multiplicator = -1 ;
+      // setRobotVelocity(0.01, +MY_PI/8.0);
+      // delay(1200); // 0 -> 40°
+      // while(1){
+      //   for(int b=0;b<24;b++){
+      //     setRobotVelocity(0.01, multiplicator*MY_PI/8.0);
+      //     delay(delayv); //echantillonnage 50ms
+      //     int diff=previousMeasuredLenght[0]-currentMeasuredLenght[0];
+      //     //peut etre calculer la diff de dérivée plutot
+      //     if(diff>20){ // a modifier selon la vitesse à laquelle on avance
+      //       nbfoisvu++;
+      //       Serial.println("Detecté ?");
+      //       if(nbfoisvu>3){
+      //         // reculer de 2 ?
+      //         Serial.println("Trouvé !");
+      //         trouvedx=true;
+      //         break;
+      //       }
+      //     }
+      //     else{
+      //       if(nbfoisvu!=0){nbfoisvu=0;Serial.println("Fausse alerte");}}
+      //     //si mesure > lastmesure+10 -> peut etre trouvé ?
+      //   }
+      //   multiplicator=multiplicator*(-1); // change le sens de rotation
+      //   if(trouvedx!=true){
+      //     if(currentMeasuredLenght[0]>240){
+      //       Serial.println("XXXXXXX Pas trouvé en largeur");
+      //       //manip de marche arrière et demi tour
+      //     }
+      //     delayv=delayv+5;continue;
+      //   } //retour au scan plus élargi
+        
+      //   // CHECKPOINT - Totem Vu
+
+      //   while(1){
+      //     setRobotVelocity(0.03, 0);
+      //     delay(10);
+      //     if(currentMeasuredLenght[0]<30){
+      //       Serial.println("Trouvé et approché!");
+      //       break;
+      //     }
+      //   }
+      // } 
+      // //quand la distance est < 20cm
+      // bool trouvedy= false;
+      // while(trouvedy==false){
+      //   consigne= consigne+0.2;
+      //   if(currentMeasuredLenght[0]-previousMeasuredLenght[0]>20){
+      //     trouvedy==true;
+      //     Serial.println("Trouvé en hauteur !");
+      //   }
+      //   delayMicroseconds(50);
+      //   if(consigne>170){Serial.println("XXXXXXX Pas trouvé en hauteur");}
+      // }
+      // setRobotVelocity(0, 0); // On arrête le robot
       
       case APPROACH: // On se positionne à la bonne distance
-
+        break;
       case GRAB: // On choppe le totem
+        step = ALIGN_WITH_BEACON;
+        break;
+      case DROP: // On pose le totem
+        break;
 
       // Puis on refait pareil que les cas précédent 
 
       // TODO : Variabliser les commandes ?
 
     } 
+
+    /*************** AFFICHAGE ***************/
+    if (SPEAK) {
+      counterForPrinting++;
+      if (counterForPrinting > printingPeriodicity) {  // Reset the counter and print
+        printData(elapsed_time_in_s);
+        counterForPrinting = 0; // Reset counter
+      }
+    }
   } else setRobotVelocity(0, 0);
   
-
-  /*************** AFFICHAGE ***************/
-  if (SPEAK) {
-    counterForPrinting++;
-    if (counterForPrinting > printingPeriodicity) {  // Reset the counter and print
-      printData(elapsed_time_in_s);
-      counterForPrinting = 0; // Reset counter
-    }
-  }
   
   /*************** CADENCEMENT ***************/
   sleep_time = PERIOD_IN_MICROS - (micros() - current_time);
@@ -359,7 +462,7 @@ void printData(double elapsedTime) {
     Serial.println(totem_grabbed ? "Yes" : "No");
     Serial.print("Servo angle: ");
     Serial.println(gripServo.read());
-    Serial.println("Servo mesure: "+String(analogRead(SERVO_FEEDBACK_PIN)));
+    Serial.println("Servo mesure: " + String(analogRead(SERVO_FEEDBACK_PIN)));
   }
 
   /*************** Asservissement ***************/
@@ -372,7 +475,7 @@ void printData(double elapsedTime) {
 }
 
 bool beaconInRange() {
-  return (abs(currentMeasuredLenght[1] - previousMeasuredLenght[1]) > 1.5); 
+  return (abs(currentMeasuredLenght[1] - previousMeasuredLenght[1]) >= 2.0); 
 }
 
 void capteur() {
