@@ -65,25 +65,25 @@ void resetMotor(int motorID) {
   
     // Send motor OFF then motor ON command to reset
     motorOFF(motorID);
-    delay(500);
+    delay(250);
     if (readMotorState(motorID) == -1) {
       Serial.println("Motor " + String(motorID) + " did not answered.");
       return;
     };
     motorON(motorID);
     readMotorState(motorID);
-    delay(500);
+    delay(250);
 
     // Send null velocity
     sendVelocityCommand(motorID, (long int)(0)); // Send 0
-    delay(500);
+    delay(250);
     readMotorState(motorID); 
   
     offsetMotorPosEncoder[motorID - 1] = relativeMotorPosEncoder[motorID - 1]; // L'offset correspond à la valeur initiale 
     currentNumOfMotorRevol[motorID - 1] = 0; // Number
     previousMotorPosDeg[motorID - 1] = 0.0;
     sendVelocityCommand(motorID, (long int)(0));
-    delay(500);
+    delay(250);
     readMotorState(motorID); 
   
     Serial.println("Motor " + String(motorID) + " was successfully reset.");
