@@ -185,10 +185,6 @@ void loop() {
   if (robotActif) {
     // Acquisition des mesures des capteurs
     capteur(); 
-    // Serial.print("currentMeasuredLenght[2]:");
-    // Serial.println(currentMotorPosDeg[2]);
-    // erreur = 150*(consigne - currentMotorPosDeg[2]);   MARCHE PAS
-    // setArmPosition(erreur);
 
 
     // Saisie du totem
@@ -212,7 +208,7 @@ void loop() {
         if (counterForMoving > 100) {
           robotWallOffsetSetpoint = currentMeasuredLenght[1];
           savedMeasuredLenght = robotWallOffsetSetpoint;
-          step = SWEEP; // On commence à avancer
+          step = GO_TO_BEACON; // On commence à avancer
           Serial.println("-->GO_TO_BEACON");  
         }
         break; 
@@ -276,13 +272,13 @@ void loop() {
 
       case TURN_TO_TOTEM: // On tourne vers le totem
         counterForMoving++;
-        if (counterForMoving < 207) setRobotVelocity(0, -MY_PI/8.0); 
+        if (counterForMoving < 400) setRobotVelocity(0, -MY_PI/16); 
         else {
           counterForMoving = 0;
           setRobotVelocity(0, 0);
           delay(100);
           setArmPosition(-2000);
-          delay(3900);
+          delay(4000);
           setArmPosition(0);
           step = APPROACH_AFTER;
           Serial.println("-->APPROACH_AFTER");
@@ -350,7 +346,7 @@ void loop() {
       case APPROACH_AFTER:
         // On avance un peu pour se rapprocher du totem
         counterForMoving++;
-        if (counterForMoving < 650) {
+        if (counterForMoving < 100) {
           setRobotVelocity(0.05, 0); // Avance à 5 cm/s
         } else {
           setRobotVelocity(0, 0);
@@ -369,14 +365,10 @@ void loop() {
           setRobotVelocity(0, MY_PI/16.0); // On tourne à 11.25°/s
         } else if ( counterForMoving < 300) {
           setRobotVelocity(0, -MY_PI/64);
-          Serial.println("current");
-          Serial.println(currentMeasuredLenght[0]);
-          Serial.println("erreur");
-          Serial.println(currentMeasuredLenght[0]-previousMeasuredLenght[0]);
           delay(100);
-          if (abs(currentMeasuredLenght[0]-previousMeasuredLenght[0]) > 10) { // Si on voit le totem
+          if (abs(currentMeasuredLenght[0]-previousMeasuredLenght[0]) > 20) { // Si on voit le totem
             Serial.println("Totem vu !");
-            delay(500*currentMeasuredLenght[0]/40); // On attend un peu pour stabiliser le robot
+            delay(500*currentMeasuredLenght[0]/27); // On attend un peu pour stabiliser le robot
             setRobotVelocity(0, 0); // On arrête le robot
             counterForMoving = 0; // On réinitialise le compteur de mouvement
             step = APPROACH; // On passe à l'étape de prise du totem
@@ -400,7 +392,7 @@ void loop() {
       case DETECT: // On saisit le totem
         counterForMoving++;
         delay(100); // On attend un peu pour stabiliser le robot
-        if (abs(currentMeasuredLenght[0] - previousMeasuredLenght[0]) > 30) {
+        if (abs(currentMeasuredLenght[0] - previousMeasuredLenght[0]) > 20) {
           setArmPosition(0); 
           counterForMoving = 0; // On réinitialise le compteur de mouvement
           delay(100);
@@ -417,10 +409,10 @@ void loop() {
         break;
       
       case GRAB: // On saisit le totem
-      {
+      
         setRobotVelocity(0.02, 0);
         if (currentMeasuredLenght[0] < 5) { // Si on est assez proche du totem
-          delay(1000); 
+          delay(1500); 
           setRobotVelocity(0, 0); // On arrête le robot
           delay(500); 
           gripServo.write(140); // On ferme la pince
@@ -432,142 +424,21 @@ void loop() {
           counterForMoving = 0; // On réinitialise le compteur de mouvement
           step = TURN_AFTER_GRAB; // On passe à l'étape de rotation après la prise du totem
         }
-      }
-      // case SWEEP: // On balaye du regard
-      //   int TOLDX = 10;
-      //   int TOLSTABLE = 4;
-      //   int COUNTFORSTABLE = 1;
-      //   int nbfoisapercuconfirmed = 0;
-      //   int nbfoisvu=0;
-      //   int delayv = 50; //valeur d'échantillonnage de délai
-      //   bool trouvedx= false;
-      //   int loopamount = 24;
-      //   consigne = 113; // mettre la bonne valeur pour qu'il rase le sol (seule zone où il pourra voir à coup sur le totem en balayant)
-      //   int multiplicator = -1 ;
-      //   float linspeed = 0.01;
-      //   float angspeed = MY_PI/16.0;
-        
-      //   setArmPosition(0);
-      //   setRobotVelocity(linspeed, angspeed);
-      //   delay((delayv*loopamount)/2); // 0 -> 40°
-      //   while(trouvedx==false){
-      //     for(int b=0;b<loopamount;b++){
-      //       float erreur = 300*(consigne - currentMotorPosDeg[2]);
-      //       setArmPosition(erreur);
-      //       setRobotVelocity(linspeed, multiplicator*angspeed);
-      //       delay(delayv); //echantillonnage 50ms
-      //       capteur();
-      //       if(currentMeasuredLenght[0]>180){continue;}
-      //       // Serial.print(String(currentMeasuredLenght[0])+"\t");
-      //       if(currentMeasuredLenght[0]<180){
-      //         Serial.print("d:");
-      //         Serial.println(currentMeasuredLenght[0]);
-      //       }
-
-      //       int diff=previousMeasuredLenght[0]-currentMeasuredLenght[0];
-      //       //peut etre calculer la diff de dérivée plutot
-      //       if(abs(diff)>TOLDX){ // a modifier selon la vitesse à laquelle on avance
-      //         Serial.println("Detecté ?");
-      //         // CONTINUER SANS REGARDER LES 2 PROCHAINES VALEURS
-      //         setArmPosition(erreur);
-      //         setRobotVelocity(linspeed, multiplicator*angspeed);
-      //         delay(delayv*2); // skip 2 valeurs
-      //         //
-      //         for(int c=0;c<=COUNTFORSTABLE;c++){
-      //           float erreur = 300*(consigne - currentMotorPosDeg[2]);
-      //           setArmPosition(erreur);
-      //           setRobotVelocity(linspeed, multiplicator*angspeed);
-      //           delay(delayv);
-      //           capteur();
-      //           Serial.print("d:");
-      //           Serial.println(currentMeasuredLenght[0]);
-      //           diff=previousMeasuredLenght[0]-currentMeasuredLenght[0];
-      //           if(abs(diff)<TOLSTABLE){
-      //             Serial.print("Stable");
-      //             nbfoisvu++;}
-      //           else{
-      //             Serial.println("Fausse alerte");
-      //             nbfoisvu=0;
-      //             break;
-      //           }
-      //         }
-      //         // Serial.println("nbfoisvu = "+nbfoisvu);
-      //         if(nbfoisvu==COUNTFORSTABLE+1){
-      //           setRobotVelocity(linspeed, (-1)*multiplicator*angspeed);
-      //           delay(delayv*COUNTFORSTABLE/2.0);
-      //           setRobotVelocity(0,0);
-      //           Serial.println("Trouvé !");
-      //           trouvedx=true;
-      //           break;
-      //         }
-      //       }
-      //     }
-      //     multiplicator=multiplicator*(-1); // change le sens de rotation
-
-      //     if(trouvedx==false){
-      //       continue;  // on retourne au début
-      //       }
-      //     // CHECKPOINT - Totem Vu
-      //     delay(2000);
-
-      //     while(1){
-      //       float erreur = 300*(consigne - currentMotorPosDeg[2]);
-      //       setArmPosition(erreur);
-      //       setRobotVelocity(0.05, 0);
-      //       delay(10);
-      //       capteur();
-      //       Serial.print("d:");
-      //       Serial.println(currentMeasuredLenght[0]);
-      //       if(abs(currentMeasuredLenght[0]-previousMeasuredLenght[0])>6){
-      //         Serial.println("totem perdu");
-      //         trouvedx=false; // on rebalaye
-      //         //sécurité
-      //       }
-      //       if(currentMeasuredLenght[0]<5){
-      //         Serial.println("Trouvé et approché!");
-      //         break;
-      //       }
-      //     }
-      //   } 
-      //   //quand la distance est < 5cm
-      //   bool trouvedy= false;
-      //   consigne=180;
-      //   float erreur = 300*(consigne - currentMotorPosDeg[2]);
-      //   setArmPosition(erreur);
-      //   setRobotVelocity(0, 0);
-      //   delay(30);
-      //   while(trouvedy==false){
-      //     consigne= consigne-0.02;
-      //     capteur();
-      //     float erreur = 300*(consigne - currentMotorPosDeg[2]);
-      //     setArmPosition(erreur);
-      //     Serial.println("DIFF Y:"+String(currentMeasuredLenght[0]-previousMeasuredLenght[0]));
-      //     if(abs(currentMeasuredLenght[0]-previousMeasuredLenght[0])>4){
-      //       trouvedy=true;
-      //       Serial.println("Trouvé en hauteur !");
-      //       angledrop = consigne; // On sauvegarde l'angle de drop
-      //     }
-      //     delay(10);
-      //   }
-      //   setRobotVelocity(0, 0); // On arrête le robot
-      //   setRobotVelocity(10, 0);
-      //   gripServo.write(0);
-      //   delayMicroseconds(50);
-      //   totem_grabbed = true; // On a le totem
-      //   counterForMoving = 0; // On réinitialise le compteur de mouvement
-      //   step = TURN_AFTER_GRAB;
-      //   break;
+      break;
+      
       case TURN_AFTER_GRAB: // On tourne pour se diriger vers la zone de dépose 
-        // counterForMoving++;
-        // if (counterForMoving < 207) setRobotVelocity(0, -MY_PI/8.0); 
-        // else {
-        //   counterForMoving = 0;
-        //   setRobotVelocity(0, 0);
-        //   step = GO_STRAIGHT;
-        //   robotWallOffsetSetpoint = currentMeasuredLenght[1];
-        //   delay(500); 
-        //   Serial.println("-->GO_STRAIGHT");
-        // }
+        counterForMoving++;
+        if ( (5000 < counterForMoving) && (counterForMoving < 5420)) {
+          setRobotVelocity(0, -MY_PI/16.0); 
+        }
+        else if (counterForMoving < 6000) {
+          counterForMoving = 0;
+          setRobotVelocity(0, 0);
+          step = GO_STRAIGHT;
+          robotWallOffsetSetpoint = currentMeasuredLenght[1];
+          delay(500); 
+          Serial.println("-->GO_STRAIGHT");
+        }
         break;
 
       case GO_STRAIGHT: // On se positionne à la bonne distance
@@ -585,18 +456,21 @@ void loop() {
         if ((abs(previousMeasuredLenght[1] - currentMeasuredLenght[1]) > 3)) { // Si la distance au setpoint est trop importante
           Serial.println("Beacon ?");
           step = TURN_AFTER_STRAIGHT;
+          counterForMoving = 0; // On réinitialise le compteur de mouvement
+          delay(1000); 
         }
         break;
       
       case TURN_AFTER_STRAIGHT: // On tourne pour se diriger vers la zone de dépose
       
       counterForMoving++;
-        if (counterForMoving < 207) setRobotVelocity(0, -MY_PI/8.0); 
-        else {
+        if (counterForMoving < 430) setRobotVelocity(0, -MY_PI/16.0); 
+        else if (counterForMoving < 500) {
           consigne = 150;
           counterForMoving = 0;
           setRobotVelocity(0, 0);
           step = FINAL_STRAIGHT;
+          delay(500); 
           robotWallOffsetSetpoint = currentMeasuredLenght[1]; // On fixe la consigne de distance au mur
           Serial.println("-->FINAL_STRAIGHT");
         }
@@ -779,3 +653,131 @@ void setArmPosition(float erreur){
   readMotorState(MOTOR_ID_ARM);
   delayMicroseconds(10);
 }
+
+
+
+
+// case SWEEP: // On balaye du regard
+      //   int TOLDX = 10;
+      //   int TOLSTABLE = 4;
+      //   int COUNTFORSTABLE = 1;
+      //   int nbfoisapercuconfirmed = 0;
+      //   int nbfoisvu=0;
+      //   int delayv = 50; //valeur d'échantillonnage de délai
+      //   bool trouvedx= false;
+      //   int loopamount = 24;
+      //   consigne = 113; // mettre la bonne valeur pour qu'il rase le sol (seule zone où il pourra voir à coup sur le totem en balayant)
+      //   int multiplicator = -1 ;
+      //   float linspeed = 0.01;
+      //   float angspeed = MY_PI/16.0;
+        
+      //   setArmPosition(0);
+      //   setRobotVelocity(linspeed, angspeed);
+      //   delay((delayv*loopamount)/2); // 0 -> 40°
+      //   while(trouvedx==false){
+      //     for(int b=0;b<loopamount;b++){
+      //       float erreur = 300*(consigne - currentMotorPosDeg[2]);
+      //       setArmPosition(erreur);
+      //       setRobotVelocity(linspeed, multiplicator*angspeed);
+      //       delay(delayv); //echantillonnage 50ms
+      //       capteur();
+      //       if(currentMeasuredLenght[0]>180){continue;}
+      //       // Serial.print(String(currentMeasuredLenght[0])+"\t");
+      //       if(currentMeasuredLenght[0]<180){
+      //         Serial.print("d:");
+      //         Serial.println(currentMeasuredLenght[0]);
+      //       }
+
+      //       int diff=previousMeasuredLenght[0]-currentMeasuredLenght[0];
+      //       //peut etre calculer la diff de dérivée plutot
+      //       if(abs(diff)>TOLDX){ // a modifier selon la vitesse à laquelle on avance
+      //         Serial.println("Detecté ?");
+      //         // CONTINUER SANS REGARDER LES 2 PROCHAINES VALEURS
+      //         setArmPosition(erreur);
+      //         setRobotVelocity(linspeed, multiplicator*angspeed);
+      //         delay(delayv*2); // skip 2 valeurs
+      //         //
+      //         for(int c=0;c<=COUNTFORSTABLE;c++){
+      //           float erreur = 300*(consigne - currentMotorPosDeg[2]);
+      //           setArmPosition(erreur);
+      //           setRobotVelocity(linspeed, multiplicator*angspeed);
+      //           delay(delayv);
+      //           capteur();
+      //           Serial.print("d:");
+      //           Serial.println(currentMeasuredLenght[0]);
+      //           diff=previousMeasuredLenght[0]-currentMeasuredLenght[0];
+      //           if(abs(diff)<TOLSTABLE){
+      //             Serial.print("Stable");
+      //             nbfoisvu++;}
+      //           else{
+      //             Serial.println("Fausse alerte");
+      //             nbfoisvu=0;
+      //             break;
+      //           }
+      //         }
+      //         // Serial.println("nbfoisvu = "+nbfoisvu);
+      //         if(nbfoisvu==COUNTFORSTABLE+1){
+      //           setRobotVelocity(linspeed, (-1)*multiplicator*angspeed);
+      //           delay(delayv*COUNTFORSTABLE/2.0);
+      //           setRobotVelocity(0,0);
+      //           Serial.println("Trouvé !");
+      //           trouvedx=true;
+      //           break;
+      //         }
+      //       }
+      //     }
+      //     multiplicator=multiplicator*(-1); // change le sens de rotation
+
+      //     if(trouvedx==false){
+      //       continue;  // on retourne au début
+      //       }
+      //     // CHECKPOINT - Totem Vu
+      //     delay(2000);
+
+      //     while(1){
+      //       float erreur = 300*(consigne - currentMotorPosDeg[2]);
+      //       setArmPosition(erreur);
+      //       setRobotVelocity(0.05, 0);
+      //       delay(10);
+      //       capteur();
+      //       Serial.print("d:");
+      //       Serial.println(currentMeasuredLenght[0]);
+      //       if(abs(currentMeasuredLenght[0]-previousMeasuredLenght[0])>6){
+      //         Serial.println("totem perdu");
+      //         trouvedx=false; // on rebalaye
+      //         //sécurité
+      //       }
+      //       if(currentMeasuredLenght[0]<5){
+      //         Serial.println("Trouvé et approché!");
+      //         break;
+      //       }
+      //     }
+      //   } 
+      //   //quand la distance est < 5cm
+      //   bool trouvedy= false;
+      //   consigne=180;
+      //   float erreur = 300*(consigne - currentMotorPosDeg[2]);
+      //   setArmPosition(erreur);
+      //   setRobotVelocity(0, 0);
+      //   delay(30);
+      //   while(trouvedy==false){
+      //     consigne= consigne-0.02;
+      //     capteur();
+      //     float erreur = 300*(consigne - currentMotorPosDeg[2]);
+      //     setArmPosition(erreur);
+      //     Serial.println("DIFF Y:"+String(currentMeasuredLenght[0]-previousMeasuredLenght[0]));
+      //     if(abs(currentMeasuredLenght[0]-previousMeasuredLenght[0])>4){
+      //       trouvedy=true;
+      //       Serial.println("Trouvé en hauteur !");
+      //       angledrop = consigne; // On sauvegarde l'angle de drop
+      //     }
+      //     delay(10);
+      //   }
+      //   setRobotVelocity(0, 0); // On arrête le robot
+      //   setRobotVelocity(10, 0);
+      //   gripServo.write(0);
+      //   delayMicroseconds(50);
+      //   totem_grabbed = true; // On a le totem
+      //   counterForMoving = 0; // On réinitialise le compteur de mouvement
+      //   step = TURN_AFTER_GRAB;
+      //   break;
