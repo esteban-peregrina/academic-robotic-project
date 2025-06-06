@@ -367,7 +367,6 @@ void loop() {
         counterForMoving++;
         if (counterForMoving < 80) {
           setRobotVelocity(0, MY_PI/16.0); // On tourne à 11.25°/s
-          consigne = 113; // On fixe la consigne de position du bras
         } else if ( counterForMoving < 300) {
           setRobotVelocity(0, -MY_PI/64);
           Serial.println("current");
@@ -429,7 +428,7 @@ void loop() {
           setArmPosition(2000); // On lève le bras
           delay(1000); // On attend un peu pour stabiliser le robot
           setArmPosition(0); // On remet le bras à la position initiale
-          totem_grabbed = true; // On a le totem
+          delay(2000); 
           counterForMoving = 0; // On réinitialise le compteur de mouvement
           step = TURN_AFTER_GRAB; // On passe à l'étape de rotation après la prise du totem
         }
@@ -559,16 +558,16 @@ void loop() {
       //   step = TURN_AFTER_GRAB;
       //   break;
       case TURN_AFTER_GRAB: // On tourne pour se diriger vers la zone de dépose 
-        counterForMoving++;
-        if (counterForMoving < 207) setRobotVelocity(0, -MY_PI/8.0); 
-        else {
-          counterForMoving = 0;
-          setRobotVelocity(0, 0);
-          step = GO_STRAIGHT;
-          robotWallOffsetSetpoint = currentMeasuredLenght[1];
-          delay(500); 
-          Serial.println("-->GO_STRAIGHT");
-        }
+        // counterForMoving++;
+        // if (counterForMoving < 207) setRobotVelocity(0, -MY_PI/8.0); 
+        // else {
+        //   counterForMoving = 0;
+        //   setRobotVelocity(0, 0);
+        //   step = GO_STRAIGHT;
+        //   robotWallOffsetSetpoint = currentMeasuredLenght[1];
+        //   delay(500); 
+        //   Serial.println("-->GO_STRAIGHT");
+        // }
         break;
 
       case GO_STRAIGHT: // On se positionne à la bonne distance
@@ -592,7 +591,7 @@ void loop() {
       case TURN_AFTER_STRAIGHT: // On tourne pour se diriger vers la zone de dépose
       
       counterForMoving++;
-        if (counterForMoving < 207) setRobotVelocity(0, MY_PI/8.0); 
+        if (counterForMoving < 207) setRobotVelocity(0, -MY_PI/8.0); 
         else {
           consigne = 150;
           counterForMoving = 0;
