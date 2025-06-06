@@ -209,7 +209,7 @@ void loop() {
           robotWallOffsetSetpoint = currentMeasuredLenght[1];
           savedMeasuredLenght = robotWallOffsetSetpoint;
           step = GO_TO_BEACON; // On commence à avancer
-          Serial.println("-->GO_TO_BEACON");  
+          Serial.println("-->GO_TO_BEACON");
         }
         break; 
 
@@ -260,89 +260,31 @@ void loop() {
 
         break;
       case ALIGN_WITH_BEACON: // On s'aligne à peu près avec la balise
-        counterForMoving++;
-        if (counterForMoving < 260) setRobotVelocity(0.1, 0); 
-        else {
-          setRobotVelocity(0, 0);
-          counterForMoving = 0;
-          step = TURN_TO_TOTEM;
-          Serial.println("-->TURN_TO_TOTEM");
-        }
+        delay(100); // On attend un peu pour stabiliser le robot
+        setRobotVelocity(0.1, 0);
+        delay(1700); // On avance un peu pour se stabiliser 
+        setRobotVelocity(0, 0);
+        counterForMoving = 0;
+        step = TURN_TO_TOTEM;
+        Serial.println("-->TURN_TO_TOTEM");
+        
         break;
 
       case TURN_TO_TOTEM: // On tourne vers le totem
-        counterForMoving++;
-        if (counterForMoving < 420) setRobotVelocity(0, -MY_PI/16); 
-        else {
-          counterForMoving = 0;
-          setRobotVelocity(0, 0);
-          delay(100);
-          setArmPosition(-2000);
-          delay(4000);
-          setArmPosition(0);
-          step = APPROACH_AFTER;
-          Serial.println("-->APPROACH_AFTER");
-        }
+        delay(100); // On attend un peu pour stabiliser le robot
+        setRobotVelocity(0, -MY_PI/8.0); // On tourne à 11.25°/s
+        delay(3400); // On tourne pendant 1 seconde
+        setRobotVelocity(0, 0); // On arrête le robot
+        delay(500);
+        setArmPosition(-2000);
+        delay(3400);
+        setArmPosition(0); // On remet le bras à la position initiale
+        delay(500); // On attend un peu pour stabiliser le robot
+        counterForMoving = 0; // On réinitialise le compteur de mouvement
+        step = APPROACH_AFTER; // On passe à l'étape de rapprochement
+        Serial.println("-->APPROACH_AFTER");
         break;
         
-      // case ALIGN_WITH_WALL:
-      //   static int oscillationCounter = 0;
-      //   static int currentDirection = 1; // 1 ou -1
-      //   static float lastDistance = 0;
-      //   static int stabilityCounter = 0;
-      //   static int angularIncrementCounter = 0;
-    
-      //   float speed = currentDirection * 0.05;
-      //   float angularSpeed = MY_PI / 6.0;  // Rotation sur place
-    
-      //   // Avancer un peu dans une direction
-      //   angularIncrementCounter++;
-      //   if (angularIncrementCounter > 100 && angularIncrementCounter < 125) { // Incrément angulaire (25 tours de boucle)
-      //     setRobotVelocity(speed, angularSpeed);
-      //   } else if (angularIncrementCounter > 200) { 
-      //     angularIncrementCounter = 0;
-      //   } else {
-      //     // Aller tout droit
-      //     setRobotVelocity(speed, 0);
-      //   }
-    
-      //   // Mesure la variation du capteur latéral (ex: capteur à droite)
-      //   float delta = currentMeasuredLenght[1] - lastDistance;
-      //   lastDistance = currentMeasuredLenght[1];
-    
-      //   // Si très peu de variation -> on commence à être parallèle
-      //   if (fabs(delta) < 0.1) {
-      //       stabilityCounter++;
-      //       angularSpeed = 0;
-      //   } else {
-      //       if (delta > 0) {
-      //         angularSpeed = MY_PI / 6.0;
-      //       } else {
-      //         angularSpeed = -MY_PI / 6.0;
-      //       }
-      //       stabilityCounter = 0;
-      //   }
-    
-      //   // Si plusieurs itérations sont stables, on considère qu’on est parallèle
-      //   if (stabilityCounter >= 10) {
-      //       setRobotVelocity(0, 0);
-      //       robotWallOffsetSetpoint = currentMeasuredLenght[1];
-      //       stabilityCounter = 0;
-      //       oscillationCounter = 0;
-      //       step = (totem_grabbed) ? GO_TO_BEACON : APPROACH_AFTER; // Si on a déjà le totem, on le prend, sinon on balaye
-      //       if (step == APPROACH_AFTER) {
-      //         counterForMoving = 0; // Reset the counter for moving
-      //       }
-      //       (step == GO_TO_BEACON) ? Serial.println("-->GO_TO_BEACON") : Serial.println("-->APPROACH_AFTER");  
-      //   }
-    
-      //   // On change de direction toutes les 50 itérations
-      //   if (++oscillationCounter > 100) {
-      //       currentDirection *= -1;
-      //       oscillationCounter = 0;
-      //   }
-      //   break;
-      
       case APPROACH_AFTER:
         // On avance un peu pour se rapprocher du totem
         counterForMoving++;
@@ -431,97 +373,101 @@ void loop() {
       break;
       
       case TURN_AFTER_GRAB: // On tourne pour se diriger vers la zone de dépose 
-        counterForMoving++;
-        if ( (100 < counterForMoving) && (counterForMoving < 630)) {
-          setRobotVelocity(0, -MY_PI/16.0); 
-        }
-        else if (counterForMoving > 630) {
-          counterForMoving = 0;
-          setRobotVelocity(0, 0);
-          step = GO_STRAIGHT;
-          robotWallOffsetSetpoint = currentMeasuredLenght[1];
-          delay(500); 
-          Serial.println("-->GO_STRAIGHT");
-        }
+        delay(100); // On attend un peu pour stabiliser le robot
+        setRobotVelocity(0, -MY_PI/8.0); // On tourne à 11.25°/s
+        delay(3400); // On tourne pendant 1 seconde
+        setRobotVelocity(0, 0); // On arrête le robot
+        delay(500);
+        step = GO_STRAIGHT;
+        robotWallOffsetSetpoint = currentMeasuredLenght[1];
+        delay(500); 
+        Serial.println("-->GO_STRAIGHT");
+        
         break;
 
       case GO_STRAIGHT: // On se positionne à la bonne distance
         //stabilityCounterForBeacon = 0;
         // Asservissement de la distance au mur
+        counterForMoving++;
+        if ((abs(previousMeasuredLenght[1] - currentMeasuredLenght[1]) > 3)) { // Si la distance au setpoint est trop importante
+          Serial.println("Beacon ?");
+          counterForMoving = 0;
+          step = TURN_AFTER_STRAIGHT;
+          Serial.println("-->TURN_AFTER_STRAIGHT");
+          delay(1000); 
+          //stabilityCounterForBeacon++;
+        }
+
         robotWallOffsetError = robotWallOffsetSetpoint - robotWallOffsetMeasure; // Erreur de position du robot par rapport au mur
         robotWallOffsetErrorIntegrated += (double)robotWallOffsetError * elapsed_time_in_s;
         if (robotWallOffsetErrorIntegrated > 100.0) robotWallOffsetErrorIntegrated = 100.0; // Saturation de l'erreur intégrée
         if (robotWallOffsetErrorIntegrated < -100.0) robotWallOffsetErrorIntegrated = -100.0; // Saturation de l'erreur intégrée
-        robotAngularVelocityCommand = correctorGain * (float)robotWallOffsetError;// + correctorIntegralGain * (float)robotWallOffsetErrorIntegrated; // Commande de vitesse angulaire du robot, proportionnelle à l'erreur de position du robot par rapport au mur (0.01 rad/cm)
+        robotAngularVelocityCommand = correctorGain * (float)robotWallOffsetError;//+ correctorIntegralGain * (float)robotWallOffsetErrorIntegrated; // Commande de vitesse angulaire du robot, proportionnelle à l'erreur de position du robot par rapport au mur (0.01 rad/cm)
         if (robotAngularVelocityCommand > 5.0) robotAngularVelocityCommand = 5.0; // Saturation de la vitesse angulaire
         if (robotAngularVelocityCommand < -5.0) robotAngularVelocityCommand = -5.0; // Saturation de la vitesse angulaire
         setRobotVelocity(0.05, -1 * robotAngularVelocityCommand); // On assigne une vitesse linéaire de 20 cm/s et une vitesse angulaire proportionnelle à l'erreur de position du robot par rapport au mur (0.01 rad/cm)
-        
-        if ((abs(previousMeasuredLenght[1] - currentMeasuredLenght[1]) > 5)) { // Si la distance au setpoint est trop importante
-          Serial.println("Beacon ?");
-          step = TURN_AFTER_STRAIGHT;
-          counterForMoving = 0; // On réinitialise le compteur de mouvement
-          Serial.println("-->TURN_AFTER_STRAIGHT");
-          delay(1000); 
-        }
+      
+          //stabilityCounterForBeacon = 0; // On réinitialise le compteur de stabilit
         break;
       
       case TURN_AFTER_STRAIGHT: // On tourne pour se diriger vers la zone de dépose
-      
-      counterForMoving++;
-        if (counterForMoving < 430) setRobotVelocity(0, -MY_PI/16.0); 
-        else {
-          consigne = 150;
-          counterForMoving = 0;
-          setRobotVelocity(0, 0);
-          step = FINAL_STRAIGHT;
-          delay(500); 
-          robotWallOffsetSetpoint = currentMeasuredLenght[1]; // On fixe la consigne de distance au mur
-          Serial.println("-->FINAL_STRAIGHT");
-        }
+        delay(100); // On attend un peu pour stabiliser le robot
+        setRobotVelocity(0, -MY_PI/8.0); // On tourne à 11.25°/s
+        delay(3400); // On tourne pendant 1 seconde
+        setRobotVelocity(0, 0); // On arrête le robot
+        delay(500);
+        step = FINAL_STRAIGHT;
+        delay(500); 
+        robotWallOffsetSetpoint = currentMeasuredLenght[1]; // On fixe la consigne de distance au mur
+        Serial.println("-->FINAL_STRAIGHT");
+        
         break;
       
       case FINAL_STRAIGHT: // On avance
         //stabilityCounterForBeacon = 0;
         // Asservissement de la distance au mur
+        counterForMoving++;
+        if ((abs(previousMeasuredLenght[1] - currentMeasuredLenght[1]) > 3)) { // Si la distance au setpoint est trop importante
+          Serial.println("Beacon ?");
+          counterForMoving = 0;
+          step = DROP;
+          Serial.println("-->DROP");
+          delay(1000); 
+          //stabilityCounterForBeacon++;
+        }
+
         robotWallOffsetError = robotWallOffsetSetpoint - robotWallOffsetMeasure; // Erreur de position du robot par rapport au mur
         robotWallOffsetErrorIntegrated += (double)robotWallOffsetError * elapsed_time_in_s;
         if (robotWallOffsetErrorIntegrated > 100.0) robotWallOffsetErrorIntegrated = 100.0; // Saturation de l'erreur intégrée
         if (robotWallOffsetErrorIntegrated < -100.0) robotWallOffsetErrorIntegrated = -100.0; // Saturation de l'erreur intégrée
-        robotAngularVelocityCommand = correctorGain * (float)robotWallOffsetError;// + correctorIntegralGain * (float)robotWallOffsetErrorIntegrated; // Commande de vitesse angulaire du robot, proportionnelle à l'erreur de position du robot par rapport au mur (0.01 rad/cm)
+        robotAngularVelocityCommand = correctorGain * (float)robotWallOffsetError;//+ correctorIntegralGain * (float)robotWallOffsetErrorIntegrated; // Commande de vitesse angulaire du robot, proportionnelle à l'erreur de position du robot par rapport au mur (0.01 rad/cm)
         if (robotAngularVelocityCommand > 5.0) robotAngularVelocityCommand = 5.0; // Saturation de la vitesse angulaire
         if (robotAngularVelocityCommand < -5.0) robotAngularVelocityCommand = -5.0; // Saturation de la vitesse angulaire
         setRobotVelocity(0.05, -1 * robotAngularVelocityCommand); // On assigne une vitesse linéaire de 20 cm/s et une vitesse angulaire proportionnelle à l'erreur de position du robot par rapport au mur (0.01 rad/cm)
+      
+          //stabilityCounterForBeacon = 0; // On réinitialise le compteur de stabilit
         
-        if ((abs(previousMeasuredLenght[1] - currentMeasuredLenght[1]) > 5)) { // Si la distance au setpoint est trop importante
-          Serial.println("Beacon ?");
-          step = DROP;
-          Serial.println("-->DROP");
-          counterForMoving = 0; // On réinitialise le compteur de mouvement
-          //stabilityCounterForBeacon++;
-        }
         break;
 
         case DROP:
-         counterForMoving++;
-        if (counterForMoving < 40){ 
-          setRobotVelocity(-0.1, 0);
-        }
-        else {
-          setRobotVelocity(0, 0);
-          counterForMoving = 0;
-          setArmPosition(-2000); 
-          delay(1000);
-          setArmPosition(0); // On remet le bras à la position initiale
-          gripServo.write(0); 
-          Serial.println("Totem déposé");
-          totem_grabbed = false; // On a déposé le totem
-          step = END; // On passe à l'étape de fin
-        }
+        delay(100); // On attend un peu pour stabiliser le robot
+        setRobotVelocity(-0.1, 0);
+        delay(1700); // On avance un peu pour se stabiliser 
+        setRobotVelocity(0, 0);
+        delay(500);
+        setArmPosition(-2000); 
+        delay(1000);
+        setArmPosition(0); // On remet le bras à la position initiale
+        gripServo.write(0); 
+        counterForMoving = 0; // On réinitialise le compteur de mouvement
+        Serial.println("Totem déposé");
+        step = END; // On passe à l'étape de fin
+        Serial.println("-->END");
         break;
 
         case END: // On a fini le parcours
-          if (counterForMoving < 50){ 
+        counterForMoving ++;
+          if (counterForMoving < 200){ 
           setRobotVelocity(-0.1, 0);
         }  
         else {
