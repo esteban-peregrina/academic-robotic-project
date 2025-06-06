@@ -272,7 +272,7 @@ void loop() {
 
       case TURN_TO_TOTEM: // On tourne vers le totem
         counterForMoving++;
-        if (counterForMoving < 400) setRobotVelocity(0, -MY_PI/16); 
+        if (counterForMoving < 420) setRobotVelocity(0, -MY_PI/16); 
         else {
           counterForMoving = 0;
           setRobotVelocity(0, 0);
@@ -415,23 +415,27 @@ void loop() {
           delay(1500); 
           setRobotVelocity(0, 0); // On arrête le robot
           delay(500); 
-          gripServo.write(140); // On ferme la pince
+          gripServo.write(130); // On ferme la pince
           delay(100);
           setArmPosition(2000); // On lève le bras
           delay(1000); // On attend un peu pour stabiliser le robot
           setArmPosition(0); // On remet le bras à la position initiale
           delay(2000); 
+          setRobotVelocity(0.1, 0);
+          delay(1000); // On avance un peu pour se stabiliser
+          setRobotVelocity(0, 0); // On arrête le robot
           counterForMoving = 0; // On réinitialise le compteur de mouvement
           step = TURN_AFTER_GRAB; // On passe à l'étape de rotation après la prise du totem
+          Serial.println("-->TURN_AFTER_GRAB");
         }
       break;
       
       case TURN_AFTER_GRAB: // On tourne pour se diriger vers la zone de dépose 
         counterForMoving++;
-        if ( (5000 < counterForMoving) && (counterForMoving < 5420)) {
+        if ( (100 < counterForMoving) && (counterForMoving < 630)) {
           setRobotVelocity(0, -MY_PI/16.0); 
         }
-        else if (counterForMoving < 6000) {
+        else if (counterForMoving > 630) {
           counterForMoving = 0;
           setRobotVelocity(0, 0);
           step = GO_STRAIGHT;
@@ -453,10 +457,11 @@ void loop() {
         if (robotAngularVelocityCommand < -5.0) robotAngularVelocityCommand = -5.0; // Saturation de la vitesse angulaire
         setRobotVelocity(0.05, -1 * robotAngularVelocityCommand); // On assigne une vitesse linéaire de 20 cm/s et une vitesse angulaire proportionnelle à l'erreur de position du robot par rapport au mur (0.01 rad/cm)
         
-        if ((abs(previousMeasuredLenght[1] - currentMeasuredLenght[1]) > 3)) { // Si la distance au setpoint est trop importante
+        if ((abs(previousMeasuredLenght[1] - currentMeasuredLenght[1]) > 5)) { // Si la distance au setpoint est trop importante
           Serial.println("Beacon ?");
           step = TURN_AFTER_STRAIGHT;
           counterForMoving = 0; // On réinitialise le compteur de mouvement
+          Serial.println("-->TURN_AFTER_STRAIGHT");
           delay(1000); 
         }
         break;
@@ -465,7 +470,7 @@ void loop() {
       
       counterForMoving++;
         if (counterForMoving < 430) setRobotVelocity(0, -MY_PI/16.0); 
-        else if (counterForMoving < 500) {
+        else {
           consigne = 150;
           counterForMoving = 0;
           setRobotVelocity(0, 0);
@@ -488,9 +493,10 @@ void loop() {
         if (robotAngularVelocityCommand < -5.0) robotAngularVelocityCommand = -5.0; // Saturation de la vitesse angulaire
         setRobotVelocity(0.05, -1 * robotAngularVelocityCommand); // On assigne une vitesse linéaire de 20 cm/s et une vitesse angulaire proportionnelle à l'erreur de position du robot par rapport au mur (0.01 rad/cm)
         
-        if ((abs(previousMeasuredLenght[1] - currentMeasuredLenght[1]) > 3)) { // Si la distance au setpoint est trop importante
+        if ((abs(previousMeasuredLenght[1] - currentMeasuredLenght[1]) > 5)) { // Si la distance au setpoint est trop importante
           Serial.println("Beacon ?");
           step = DROP;
+          Serial.println("-->DROP");
           counterForMoving = 0; // On réinitialise le compteur de mouvement
           //stabilityCounterForBeacon++;
         }
@@ -498,7 +504,7 @@ void loop() {
 
         case DROP:
          counterForMoving++;
-        if (counterForMoving < 200){ 
+        if (counterForMoving < 40){ 
           setRobotVelocity(-0.1, 0);
         }
         else {
@@ -506,6 +512,7 @@ void loop() {
           counterForMoving = 0;
           setArmPosition(-2000); 
           delay(1000);
+          setArmPosition(0); // On remet le bras à la position initiale
           gripServo.write(0); 
           Serial.println("Totem déposé");
           totem_grabbed = false; // On a déposé le totem
@@ -514,7 +521,7 @@ void loop() {
         break;
 
         case END: // On a fini le parcours
-          if (counterForMoving < 200){ 
+          if (counterForMoving < 50){ 
           setRobotVelocity(-0.1, 0);
         }  
         else {
