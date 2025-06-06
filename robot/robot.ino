@@ -46,6 +46,7 @@ enum RobotState {
   APPROACH_AFTER,
   SWEEP,
   APPROACH,
+  DETECT,
   GRAB,
   TURN_AFTER_GRAB,
   GO_STRAIGHT,
@@ -211,7 +212,7 @@ void loop() {
         if (counterForMoving > 100) {
           robotWallOffsetSetpoint = currentMeasuredLenght[1];
           savedMeasuredLenght = robotWallOffsetSetpoint;
-          step = GO_TO_BEACON; // On commence à avancer
+          step = SWEEP; // On commence à avancer
           Serial.println("-->GO_TO_BEACON");  
         }
         break; 
@@ -281,7 +282,7 @@ void loop() {
           setRobotVelocity(0, 0);
           delay(100);
           setArmPosition(-2000);
-          delay(4000);
+          delay(3900);
           setArmPosition(0);
           step = APPROACH_AFTER;
           Serial.println("-->APPROACH_AFTER");
@@ -373,9 +374,10 @@ void loop() {
           Serial.println(currentMeasuredLenght[0]);
           Serial.println("erreur");
           Serial.println(currentMeasuredLenght[0]-previousMeasuredLenght[0]);
+          delay(100);
           if (abs(currentMeasuredLenght[0]-previousMeasuredLenght[0]) > 10) { // Si on voit le totem
             Serial.println("Totem vu !");
-            delay(250); // On attend un peu pour stabiliser le robot
+            delay(500*currentMeasuredLenght[0]/40); // On attend un peu pour stabiliser le robot
             setRobotVelocity(0, 0); // On arrête le robot
             counterForMoving = 0; // On réinitialise le compteur de mouvement
             step = APPROACH; // On passe à l'étape de prise du totem
@@ -386,18 +388,52 @@ void loop() {
 
       case APPROACH: // On avance pour se rapprocher du totem
         setRobotVelocity(0.02, 0);
-        if (currentMeasuredLenght[0] < 10) { 
+        if (currentMeasuredLenght[0] < 7) { 
           setRobotVelocity(0, 0);
           counterForMoving = 0;
-          step = GRAB; // On passe à l'étape de prise du totem
-          Serial.println("-->GRAB");
+          step = DETECT; // On passe à l'étape de prise du totem
+          gripServo.write(0);
+          Serial.println("-->DETECT");
+          setArmPosition(2000);
         }
         break; 
 
-      case GRAB: // On saisit le totem
-        gripServo.write(0);
+      case DETECT: // On saisit le totem
+        counterForMoving++;
+        delay(100); // On attend un peu pour stabiliser le robot
+        if (abs(currentMeasuredLenght[0] - previousMeasuredLenght[0]) > 30) {
+          setArmPosition(0); 
+          counterForMoving = 0; // On réinitialise le compteur de mouvement
+          delay(100);
+          setArmPosition(-2000);
+          delay(250);
+          setArmPosition(0); // On remet le bras à la position initiale
+          step = GRAB;
+          Serial.println("-->GRAB");
+        }
+        if (counterForMoving < 100) {
+          setRobotVelocity(0, 0);
+          Serial.println("Totem pas detecté !");
+        }
         break;
-
+      
+      case GRAB: // On saisit le totem
+      {
+        setRobotVelocity(0.02, 0);
+        if (currentMeasuredLenght[0] < 5) { // Si on est assez proche du totem
+          delay(1000); 
+          setRobotVelocity(0, 0); // On arrête le robot
+          delay(500); 
+          gripServo.write(140); // On ferme la pince
+          delay(100);
+          setArmPosition(2000); // On lève le bras
+          delay(1000); // On attend un peu pour stabiliser le robot
+          setArmPosition(0); // On remet le bras à la position initiale
+          totem_grabbed = true; // On a le totem
+          counterForMoving = 0; // On réinitialise le compteur de mouvement
+          step = TURN_AFTER_GRAB; // On passe à l'étape de rotation après la prise du totem
+        }
+      }
       // case SWEEP: // On balaye du regard
       //   int TOLDX = 10;
       //   int TOLSTABLE = 4;
@@ -522,15 +558,15 @@ void loop() {
       //   counterForMoving = 0; // On réinitialise le compteur de mouvement
       //   step = TURN_AFTER_GRAB;
       //   break;
-      case TURN_AFTER_GRAB: // On tourne pour se diriger vers la zone de dépose
+      case TURN_AFTER_GRAB: // On tourne pour se diriger vers la zone de dépose 
         counterForMoving++;
-        if (counterForMoving < 300) setRobotVelocity(0, MY_PI/8.0); 
+        if (counterForMoving < 207) setRobotVelocity(0, -MY_PI/8.0); 
         else {
-          consigne = 113;
           counterForMoving = 0;
           setRobotVelocity(0, 0);
           step = GO_STRAIGHT;
           robotWallOffsetSetpoint = currentMeasuredLenght[1];
+          delay(500); 
           Serial.println("-->GO_STRAIGHT");
         }
         break;
@@ -554,8 +590,9 @@ void loop() {
         break;
       
       case TURN_AFTER_STRAIGHT: // On tourne pour se diriger vers la zone de dépose
-        counterForMoving++;
-        if (counterForMoving < 300) setRobotVelocity(0, MY_PI/8.0); 
+      
+      counterForMoving++;
+        if (counterForMoving < 207) setRobotVelocity(0, MY_PI/8.0); 
         else {
           consigne = 150;
           counterForMoving = 0;
@@ -588,12 +625,15 @@ void loop() {
 
         case DROP:
          counterForMoving++;
-        if (counterForMoving < 400){ 
+        if (counterForMoving < 200){ 
           setRobotVelocity(-0.1, 0);
         }
         else {
           setRobotVelocity(0, 0);
           counterForMoving = 0;
+          setArmPosition(-2000); 
+          delay(1000);
+          gripServo.write(0); 
           Serial.println("Totem déposé");
           totem_grabbed = false; // On a déposé le totem
           step = END; // On passe à l'étape de fin
@@ -601,7 +641,7 @@ void loop() {
         break;
 
         case END: // On a fini le parcours
-          if (counterForMoving < 400){ 
+          if (counterForMoving < 200){ 
           setRobotVelocity(-0.1, 0);
         }  
         else {
