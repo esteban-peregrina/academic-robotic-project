@@ -26,3 +26,6 @@ The robot implements a finite state machine with the following states:
 - Grasping
 - Transport
 - Placement and release
+
+> [!WARNING] Warning
+> Please look at the different branches to find the StateMachine code.
